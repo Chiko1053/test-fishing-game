@@ -1,0 +1,2311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Lumina Cove — Cozy 3D Fishing</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: #0f172a;
+      color: #f8fafc;
+      touch-action: none;
+    }
+    #canvas-container {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+    .glass-panel {
+      background: rgba(15, 23, 42, 0.72);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+    }
+    .glass-pill {
+      background: rgba(15, 23, 42, 0.65);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+    @keyframes floatSlow {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-5px); }
+    }
+    @keyframes pulseRing {
+      0% { transform: scale(0.92); opacity: 0.9; }
+      70% { transform: scale(1.18); opacity: 0; }
+      100% { transform: scale(1.18); opacity: 0; }
+    }
+    .animate-float {
+      animation: floatSlow 3s ease-in-out infinite;
+    }
+    .pulse-ring::after {
+      content: '';
+      position: absolute;
+      inset: -6px;
+      border-radius: 9999px;
+      border: 3px solid rgba(251, 191, 36, 0.75);
+      animation: pulseRing 1.2s cubic-bezier(0, 0, 0.2, 1) infinite;
+      pointer-events: none;
+    }
+    /* Custom scrollbars for modals */
+    .custom-scroll::-webkit-scrollbar {
+      width: 6px;
+    }
+    .custom-scroll::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.4);
+      border-radius: 8px;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: rgba(148, 163, 184, 0.4);
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body class="relative w-full h-full overflow-hidden select-none">
+
+  <!-- 3D Viewport Container -->
+  <div id="canvas-container"></div>
+
+  <!-- Top Navigation & Status Bar -->
+  <header class="relative z-10 w-full px-3 pt-3 sm:px-5 sm:pt-4 pointer-events-none flex flex-wrap items-center justify-between gap-2">
+    <!-- Left: Brand & Coins / Stats -->
+    <div class="flex items-center gap-2 pointer-events-auto">
+      <div class="glass-pill rounded-2xl px-3 py-1.5 sm:px-4 sm:py-2 flex items-center gap-2.5 shadow-lg">
+        <span class="text-xl sm:text-2xl">🎣</span>
+        <div>
+          <h1 class="text-xs sm:text-sm font-bold tracking-tight text-amber-200 leading-tight">Lumina Cove</h1>
+          <p id="env-label" class="text-[10px] sm:text-xs text-slate-300 leading-tight">Golden Sunset</p>
+        </div>
+      </div>
+
+      <div class="glass-pill rounded-2xl px-3 py-1.5 sm:px-3.5 sm:py-2 flex items-center gap-3 shadow-lg">
+        <div class="flex items-center gap-1.5" title="Gold Coins">
+          <span class="text-amber-400 text-sm sm:text-base">🪙</span>
+          <span id="coin-count" class="text-xs sm:text-sm font-bold text-amber-100">50</span>
+        </div>
+        <div class="h-3.5 w-[1px] bg-slate-600/70"></div>
+        <div class="flex items-center gap-1.5" title="Fish Caught">
+          <span class="text-sky-400 text-sm sm:text-base">🐟</span>
+          <span id="catch-count" class="text-xs sm:text-sm font-semibold text-sky-100">0</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Quick Controls -->
+    <div class="flex items-center gap-1.5 sm:gap-2 pointer-events-auto">
+      <button id="btn-time" type="button" class="glass-pill hover:bg-slate-800/80 active:scale-95 transition rounded-xl px-2.5 py-2 sm:px-3 sm:py-2 text-xs font-medium flex items-center gap-1.5 shadow-md" title="Cycle Time of Day (Key: T)">
+        <span id="time-icon">🌅</span>
+        <span class="hidden md:inline" id="time-btn-text">Sunset</span>
+      </button>
+
+      <button id="btn-camera" type="button" class="glass-pill hover:bg-slate-800/80 active:scale-95 transition rounded-xl px-2.5 py-2 sm:px-3 sm:py-2 text-xs font-medium flex items-center gap-1.5 shadow-md" title="Switch Camera View (Key: C)">
+        <span>🎥</span>
+        <span class="hidden md:inline" id="cam-btn-text">Dock</span>
+      </button>
+
+      <button id="btn-zen" type="button" class="glass-pill hover:bg-slate-800/80 active:scale-95 transition rounded-xl px-2.5 py-2 sm:px-3 sm:py-2 text-xs font-medium flex items-center gap-1.5 shadow-md" title="Toggle Zen Auto-Reel Mode (Key: Z)">
+        <span id="zen-icon">🧘</span>
+        <span class="hidden sm:inline" id="zen-text">Zen: Off</span>
+      </button>
+
+      <button id="btn-journal" type="button" class="glass-pill hover:bg-slate-800/80 active:scale-95 transition rounded-xl px-2.5 py-2 sm:px-3 sm:py-2 text-xs font-medium flex items-center gap-1.5 shadow-md relative" title="Open Fish Journal (Key: J)">
+        <span>📖</span>
+        <span class="hidden sm:inline">Journal</span>
+        <span id="journal-badge" class="hidden absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-slate-900"></span>
+      </button>
+
+      <button id="btn-shop" type="button" class="glass-pill hover:bg-slate-800/80 active:scale-95 transition rounded-xl px-2.5 py-2 sm:px-3 sm:py-2 text-xs font-medium flex items-center gap-1.5 shadow-md relative" title="Open Tackle Shop (Key: S)">
+        <span>⛺</span>
+        <span class="hidden sm:inline">Shop</span>
+        <span id="shop-badge" class="hidden absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-400 ring-2 ring-slate-900"></span>
+      </button>
+
+      <button id="btn-audio" type="button" class="glass-pill hover:bg-slate-800/80 active:scale-95 transition rounded-xl px-2.5 py-2 sm:px-3 sm:py-2 text-xs font-medium flex items-center justify-center shadow-md" title="Toggle Sound & Ambience (Key: M)" aria-label="Toggle Sound">
+        <span id="audio-icon">🔊</span>
+      </button>
+
+      <button id="btn-settings" type="button" class="glass-pill hover:bg-slate-800/80 active:scale-95 transition rounded-xl px-2.5 py-2 sm:px-3 sm:py-2 text-xs font-medium flex items-center justify-center shadow-md" title="Settings & Controls">
+        <span>⚙️</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Toast / Whisper Banner -->
+  <div id="toast-container" class="fixed top-16 sm:top-20 left-1/2 -translate-x-1/2 z-20 pointer-events-none flex flex-col items-center gap-1.5 w-11/12 max-w-md">
+    <div id="status-banner" class="glass-pill px-4 py-1.5 rounded-full text-xs sm:text-sm text-slate-200 font-medium shadow-lg transition-all duration-300 text-center">
+      Drag on the water to aim, or hold <span class="text-amber-300 font-semibold">Cast Line</span> to fish
+    </div>
+  </div>
+
+  <!-- Bite Exclamation Floating Indicator -->
+  <div id="bite-indicator" class="hidden fixed top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none">
+    <div class="animate-bounce bg-amber-400 text-slate-950 font-extrabold text-xl sm:text-2xl px-5 py-2.5 rounded-full shadow-2xl border-2 border-white flex items-center gap-2">
+      <span>💦</span>
+      <span>BITE! TAP HOOK!</span>
+    </div>
+  </div>
+
+  <!-- Reeling Mini-Game Overlay -->
+  <div id="reel-overlay" class="hidden fixed left-1/2 -translate-x-1/2 bottom-28 sm:bottom-32 z-20 w-11/12 max-w-md pointer-events-none">
+    <div class="glass-panel rounded-2xl p-3.5 sm:p-4 shadow-2xl border border-amber-300/30">
+      <div class="flex items-center justify-between text-xs font-semibold mb-1.5">
+        <span id="reel-fish-hint" class="text-sky-300 flex items-center gap-1.5">
+          <span>🐟</span>
+          <span>Lively Silhouette on the Line!</span>
+        </span>
+        <span id="reel-progress-text" class="text-emerald-300 font-bold">35%</span>
+      </div>
+
+      <!-- Catch Progress Bar -->
+      <div class="w-full h-2.5 bg-slate-800/90 rounded-full overflow-hidden mb-3 border border-slate-700">
+        <div id="reel-progress-bar" class="h-full bg-gradient-to-r from-emerald-500 to-teal-300 transition-all duration-75" style="width: 35%"></div>
+      </div>
+
+      <!-- Tension / Sweet Spot Track -->
+      <div class="relative w-full h-9 bg-slate-900/95 rounded-xl overflow-hidden border border-slate-600/80 shadow-inner">
+        <!-- Safe Catch Zone (Green Window) -->
+        <div id="reel-sweet-spot" class="absolute top-0 bottom-0 bg-emerald-500/35 border-x-2 border-emerald-400 rounded transition-none" style="left: 30%; width: 28%;">
+          <div class="w-full h-full flex items-center justify-center text-[10px] font-bold uppercase tracking-wider text-emerald-200/80">
+            Sweet Spot
+          </div>
+        </div>
+        <!-- Fish Target Marker -->
+        <div id="reel-fish-marker" class="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 text-base transition-none pointer-events-none" style="left: 44%;">
+          🐟
+        </div>
+        <!-- Player Tension Indicator -->
+        <div id="reel-player-cursor" class="absolute top-0.5 bottom-0.5 w-3 -translate-x-1/2 rounded-full bg-amber-300 shadow-[0_0_10px_rgba(251,191,36,0.9)] border border-white transition-none" style="left: 40%;"></div>
+      </div>
+
+      <p class="text-[11px] text-slate-300 text-center mt-2">
+        Hold <span class="text-amber-300 font-semibold">REEL IN</span> (or Space / Mouse) to pull right, release to drift left
+      </p>
+    </div>
+  </div>
+
+  <!-- Cast Power Bar Overlay -->
+  <div id="cast-power-overlay" class="hidden fixed left-1/2 -translate-x-1/2 bottom-28 sm:bottom-32 z-20 w-64 pointer-events-none">
+    <div class="glass-panel rounded-2xl p-3 shadow-xl">
+      <div class="flex justify-between text-xs font-semibold mb-1 text-amber-200">
+        <span>Cast Power</span>
+        <span id="cast-power-label">50%</span>
+      </div>
+      <div class="w-full h-3 bg-slate-900 rounded-full overflow-hidden border border-slate-700">
+        <div id="cast-power-bar" class="h-full bg-gradient-to-r from-sky-400 via-amber-400 to-rose-400" style="width: 50%"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom Action & Gear Dock -->
+  <footer class="fixed bottom-0 left-0 right-0 z-10 px-4 pb-4 sm:pb-6 pointer-events-none flex flex-col items-center gap-2">
+    <!-- Active Gear Summary Pill -->
+    <div class="glass-pill rounded-full px-3.5 py-1 text-[11px] sm:text-xs text-slate-300 flex items-center gap-3 shadow-md pointer-events-auto">
+      <span id="gear-rod-label" class="flex items-center gap-1">🎋 <strong class="text-slate-100 font-medium">Bamboo Rod</strong></span>
+      <span class="text-slate-600">•</span>
+      <span id="gear-lure-label" class="flex items-center gap-1">🪱 <strong class="text-slate-100 font-medium">Bread Crumb</strong></span>
+      <span class="text-slate-600 hidden sm:inline">•</span>
+      <span id="streak-label" class="hidden sm:flex items-center gap-1 text-amber-300">✨ Streak: <strong id="streak-count">0</strong></span>
+    </div>
+
+    <!-- Main Ergonomic Action Button (Works smoothly for Touch + Mouse + Spacebar) -->
+    <div class="pointer-events-auto flex items-center gap-3">
+      <button id="main-action-btn" type="button" class="relative min-w-[200px] sm:min-w-[230px] py-3.5 px-7 rounded-full font-bold text-sm sm:text-base tracking-wide shadow-2xl transition-transform active:scale-95 bg-gradient-to-r from-amber-400 to-orange-400 text-slate-950 border-2 border-amber-200 flex items-center justify-center gap-2.5">
+        <span id="main-action-icon" class="text-lg">🎣</span>
+        <span id="main-action-text">HOLD TO CAST</span>
+      </button>
+    </div>
+  </footer>
+
+  <!-- Catch Celebration Modal -->
+  <div id="catch-modal" class="hidden fixed inset-0 z-30 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="glass-panel rounded-3xl max-w-sm w-full p-5 sm:p-6 shadow-2xl border border-white/20 text-center animate-float">
+      <div class="flex items-center justify-between mb-2">
+        <span id="catch-rarity-badge" class="text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-400/30">
+          Common
+        </span>
+        <span id="catch-new-badge" class="hidden text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/40">
+          ✨ New Discovery!
+        </span>
+      </div>
+
+      <!-- SVG Fish Artwork Container -->
+      <div id="catch-svg-box" class="w-40 h-28 mx-auto my-2 flex items-center justify-center rounded-2xl bg-slate-900/60 border border-white/10 p-3 shadow-inner"></div>
+
+      <h2 id="catch-fish-name" class="text-xl sm:text-2xl font-extrabold text-white mt-2">Sunbeam Minnow</h2>
+      <p id="catch-fish-lore" class="text-xs sm:text-sm text-slate-300 mt-1 leading-relaxed">
+        Scales that shimmer like warm morning light on shallow ripples.
+      </p>
+
+      <div class="grid grid-cols-2 gap-2.5 my-4 bg-slate-900/70 p-3 rounded-2xl border border-slate-800">
+        <div>
+          <div class="text-[11px] text-slate-400">Weight</div>
+          <div id="catch-fish-weight" class="text-sm sm:text-base font-bold text-slate-100">0.42 kg</div>
+        </div>
+        <div>
+          <div class="text-[11px] text-slate-400">Value</div>
+          <div id="catch-fish-value" class="text-sm sm:text-base font-bold text-amber-300">+15 🪙</div>
+        </div>
+      </div>
+
+      <div class="flex gap-2.5">
+        <button id="btn-release-fish" type="button" class="flex-1 py-2.5 px-3 rounded-xl font-semibold text-xs sm:text-sm bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 border border-emerald-400/30 transition active:scale-95" title="Release back into the cove for Eco Harmony coins">
+          🌊 Release (+<span id="release-coin-val">15</span> 🪙)
+        </button>
+        <button id="btn-keep-fish" type="button" class="flex-1 py-2.5 px-3 rounded-xl font-bold text-xs sm:text-sm bg-amber-400 hover:bg-amber-300 text-slate-950 transition active:scale-95">
+          🧺 Keep (+<span id="keep-coin-val">15</span> 🪙)
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fishpedia / Journal Modal -->
+  <div id="journal-modal" class="hidden fixed inset-0 z-30 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6">
+    <div class="glass-panel rounded-3xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl border border-white/15 overflow-hidden">
+      <div class="px-5 py-4 border-b border-slate-700/70 flex items-center justify-between">
+        <div>
+          <h2 class="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+            <span>📖</span>
+            <span>Lumina Cove Fish Journal</span>
+          </h2>
+          <p id="journal-summary" class="text-xs text-slate-300">Discovered 0 / 12 Species</p>
+        </div>
+        <button id="btn-close-journal" type="button" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center font-bold text-sm">
+          ✕
+        </button>
+      </div>
+
+      <div id="journal-grid" class="p-4 sm:p-5 overflow-y-auto custom-scroll grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <!-- Dynamically populated fish cards -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Tackle Shop / Upgrades Modal -->
+  <div id="shop-modal" class="hidden fixed inset-0 z-30 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6">
+    <div class="glass-panel rounded-3xl max-w-xl w-full max-h-[85vh] flex flex-col shadow-2xl border border-white/15 overflow-hidden">
+      <div class="px-5 py-4 border-b border-slate-700/70 flex items-center justify-between">
+        <div>
+          <h2 class="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+            <span>⛺</span>
+            <span>Dockside Tackle & Cozy Gear</span>
+          </h2>
+          <p class="text-xs text-slate-300">Upgrade your rod, bait, and line for rarer fish and smoother reeling</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <div class="bg-slate-900/90 px-3 py-1 rounded-full border border-amber-400/30 text-xs font-bold text-amber-300">
+            🪙 <span id="shop-coin-display">50</span>
+          </div>
+          <button id="btn-close-shop" type="button" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center font-bold text-sm">
+            ✕
+          </button>
+        </div>
+      </div>
+
+      <div id="shop-list" class="p-4 sm:p-5 overflow-y-auto custom-scroll space-y-3">
+        <!-- Dynamically populated upgrade items -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings & Controls Modal -->
+  <div id="settings-modal" class="hidden fixed inset-0 z-30 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="glass-panel rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-white/15">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-700/70 mb-4">
+        <h2 class="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+          <span>⚙️</span>
+          <span>Cozy Settings & Controls</span>
+        </h2>
+        <button id="btn-close-settings" type="button" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center font-bold text-sm">
+          ✕
+        </button>
+      </div>
+
+      <div class="space-y-3.5 text-xs sm:text-sm">
+        <div class="flex items-center justify-between bg-slate-900/60 p-3 rounded-2xl border border-slate-800">
+          <div>
+            <div class="font-semibold text-slate-100">Graphics Quality</div>
+            <div class="text-[11px] text-slate-400">Adjust pixel resolution & particle count for battery or smoothness</div>
+          </div>
+          <button id="btn-quality-toggle" type="button" class="px-3 py-1.5 rounded-xl font-semibold bg-sky-500/20 text-sky-300 border border-sky-400/30">
+            High (Auto)
+          </button>
+        </div>
+
+        <div class="flex items-center justify-between bg-slate-900/60 p-3 rounded-2xl border border-slate-800">
+          <div>
+            <div class="font-semibold text-slate-100">Zen Auto-Reel Mode</div>
+            <div class="text-[11px] text-slate-400">Catch hooked fish automatically without the tension bar</div>
+          </div>
+          <button id="btn-settings-zen" type="button" class="px-3 py-1.5 rounded-xl font-semibold bg-slate-800 text-slate-300 border border-slate-700">
+            Off
+          </button>
+        </div>
+
+        <div class="bg-slate-900/60 p-3.5 rounded-2xl border border-slate-800 space-y-1.5">
+          <div class="font-semibold text-amber-200 mb-1">How to Play (Mobile & PC)</div>
+          <p class="text-xs text-slate-300">• <strong>Aim:</strong> Drag finger or move mouse across the water to position your target ring.</p>
+          <p class="text-xs text-slate-300">• <strong>Cast:</strong> Hold the <strong>Cast Line</strong> button (or <kbd class="px-1.5 py-0.5 bg-slate-800 rounded">Space</kbd>) to charge power, then release.</p>
+          <p class="text-xs text-slate-300">• <strong>Hook & Reel:</strong> When you see <strong>BITE!</strong>, tap/press immediately, then hold to keep the amber cursor inside the green Sweet Spot.</p>
+          <p class="text-xs text-slate-300">• <strong>Shortcuts:</strong> <kbd class="px-1 bg-slate-800 rounded">T</kbd> Time, <kbd class="px-1 bg-slate-800 rounded">C</kbd> Camera, <kbd class="px-1 bg-slate-800 rounded">J</kbd> Journal, <kbd class="px-1 bg-slate-800 rounded">S</kbd> Shop, <kbd class="px-1 bg-slate-800 rounded">M</kbd> Mute.</p>
+        </div>
+
+        <div class="pt-2 flex justify-between items-center">
+          <button id="btn-reset-save" type="button" class="text-xs text-rose-400 hover:text-rose-300 underline">
+            Reset Saved Progress
+          </button>
+          <span id="reset-confirm-msg" class="hidden text-xs text-emerald-300 font-medium">Progress Reset!</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // =========================================================================
+    // 1. FISH CATALOG & UPGRADE DATA
+    // =========================================================================
+    const FISH_SPECIES = [
+      {
+        id: 'sunbeam_minnow',
+        name: 'Sunbeam Minnow',
+        rarity: 'Common',
+        rarityColor: 'sky',
+        baseWeight: 0.25,
+        maxWeight: 0.85,
+        baseValue: 12,
+        difficulty: 0.22,
+        prefTime: 'any',
+        colorPrimary: '#fbbf24',
+        colorSecondary: '#fef08a',
+        lore: 'Scales that shimmer like warm morning light dancing on shallow ripples.'
+      },
+      {
+        id: 'bluegill_perch',
+        name: 'Cerulean Perch',
+        rarity: 'Common',
+        rarityColor: 'sky',
+        baseWeight: 0.4,
+        maxWeight: 1.4,
+        baseValue: 16,
+        difficulty: 0.26,
+        prefTime: 'any',
+        colorPrimary: '#38bdf8',
+        colorSecondary: '#bae6fd',
+        lore: 'Friendly schooling fish often found resting beneath floating lily pads.'
+      },
+      {
+        id: 'emerald_bass',
+        name: 'Mossback Bass',
+        rarity: 'Common',
+        rarityColor: 'sky',
+        baseWeight: 0.9,
+        maxWeight: 3.2,
+        baseValue: 22,
+        difficulty: 0.32,
+        prefTime: 'any',
+        colorPrimary: '#34d399',
+        colorSecondary: '#a7f3d0',
+        lore: 'Loves coolpine shadows near wooden dock pilings and sunken logs.'
+      },
+      {
+        id: 'amber_carp',
+        name: 'Honeycomb Carp',
+        rarity: 'Uncommon',
+        rarityColor: 'emerald',
+        baseWeight: 1.5,
+        maxWeight: 4.8,
+        baseValue: 35,
+        difficulty: 0.40,
+        prefTime: 'sunset',
+        colorPrimary: '#f59e0b',
+        colorSecondary: '#fde68a',
+        lore: 'A peaceful bottom-dweller whose golden flanks glow at dusk.'
+      },
+      {
+        id: 'sakura_trout',
+        name: 'Blossom Trout',
+        rarity: 'Uncommon',
+        rarityColor: 'emerald',
+        baseWeight: 1.1,
+        maxWeight: 3.6,
+        baseValue: 40,
+        difficulty: 0.44,
+        prefTime: 'morning',
+        colorPrimary: '#f472b6',
+        colorSecondary: '#fbcfe8',
+        lore: 'Rosy-speckled swimmer that leaps through misty morning breezes.'
+      },
+      {
+        id: 'moonlight_catfish',
+        name: 'Whisker Moon Catfish',
+        rarity: 'Uncommon',
+        rarityColor: 'emerald',
+        baseWeight: 2.2,
+        maxWeight: 6.5,
+        baseValue: 48,
+        difficulty: 0.48,
+        prefTime: 'night',
+        colorPrimary: '#818cf8',
+        colorSecondary: '#c7d2fe',
+        lore: 'Uses its long silver whiskers to sense gentle ripples under starry skies.'
+      },
+      {
+        id: 'sunset_koi',
+        name: 'Lantern Brocade Koi',
+        rarity: 'Rare',
+        rarityColor: 'purple',
+        baseWeight: 2.0,
+        maxWeight: 5.5,
+        baseValue: 75,
+        difficulty: 0.56,
+        prefTime: 'sunset',
+        colorPrimary: '#fb7185',
+        colorSecondary: '#fed7aa',
+        lore: 'Prized by island elders for its swirling crimson and ivory patterns.'
+      },
+      {
+        id: 'jade_pike',
+        name: 'Whispering Reed Pike',
+        rarity: 'Rare',
+        rarityColor: 'purple',
+        baseWeight: 3.0,
+        maxWeight: 8.4,
+        baseValue: 90,
+        difficulty: 0.62,
+        prefTime: 'day',
+        colorPrimary: '#10b981',
+        colorSecondary: '#6ee7b7',
+        lore: 'Sleek and swift like an arrow darting between swaying water reeds.'
+      },
+      {
+        id: 'sapphire_angelfish',
+        name: 'Glasswing Angelfish',
+        rarity: 'Rare',
+        rarityColor: 'purple',
+        baseWeight: 0.8,
+        maxWeight: 2.4,
+        baseValue: 105,
+        difficulty: 0.65,
+        prefTime: 'morning',
+        colorPrimary: '#60a5fa',
+        colorSecondary: '#e0f2fe',
+        lore: 'Translucent fins refract sunlight into tiny underwater rainbows.'
+      },
+      {
+        id: 'starlight_ray',
+        name: 'Astral Glider Ray',
+        rarity: 'Legendary',
+        rarityColor: 'amber',
+        baseWeight: 5.5,
+        maxWeight: 14.0,
+        baseValue: 180,
+        difficulty: 0.74,
+        prefTime: 'night',
+        colorPrimary: '#a855f7',
+        colorSecondary: '#f3e8ff',
+        lore: 'Bioluminescent spots along its wings mirror the constellations above.'
+      },
+      {
+        id: 'golden_dragon_koi',
+        name: 'Sovereign Dragon Koi',
+        rarity: 'Legendary',
+        rarityColor: 'amber',
+        baseWeight: 6.0,
+        maxWeight: 16.5,
+        baseValue: 240,
+        difficulty: 0.80,
+        prefTime: 'sunset',
+        colorPrimary: '#eab308',
+        colorSecondary: '#fef9c3',
+        lore: 'Legend says catching a glimpse of its radiant whiskers brings a year of calm.'
+      },
+      {
+        id: 'celestial_leviathan',
+        name: 'Lumina Spirit Fin',
+        rarity: 'Mythic',
+        rarityColor: 'rose',
+        baseWeight: 9.5,
+        maxWeight: 24.0,
+        baseValue: 380,
+        difficulty: 0.86,
+        prefTime: 'night',
+        colorPrimary: '#2dd4bf',
+        colorSecondary: '#ccfbf1',
+        lore: 'The ancient guardian of Lumina Cove, glowing with serene spirit light.'
+      }
+    ];
+
+    const UPGRADES = {
+      rod: [
+        { level: 0, name: 'Bamboo Rod', icon: '🎋', cost: 0, sweetSpotBonus: 0, castBonus: 0, desc: 'Light and flexible starter rod carved from island bamboo.' },
+        { level: 1, name: 'Willow Creek Rod', icon: '🌿', cost: 45, sweetSpotBonus: 5, castBonus: 0.15, desc: '+18% wider Sweet Spot & longer cast reach.' },
+        { level: 2, name: 'Artisan Cedar Rod', icon: '🪵', cost: 130, sweetSpotBonus: 10, castBonus: 0.30, desc: '+35% wider Sweet Spot & deeper water casts.' },
+        { level: 3, name: 'Lumina Master Rod', icon: '✨', cost: 320, sweetSpotBonus: 16, castBonus: 0.50, desc: '+55% wider Sweet Spot & effortless long-distance casting.' }
+      ],
+      lure: [
+        { level: 0, name: 'Bread Crumb', icon: '🍞', cost: 0, waitMultiplier: 1.0, rarityBonus: 0, desc: 'Simple homemade dough ball that attracts common cove fish.' },
+        { level: 1, name: 'Dewdrop Worm', icon: '🪱', cost: 40, waitMultiplier: 0.78, rarityBonus: 0.12, desc: 'Fish bite 22% faster with higher Uncommon chance.' },
+        { level: 2, name: 'Feather Spinner', icon: '🪶', cost: 120, waitMultiplier: 0.62, rarityBonus: 0.26, desc: 'Fish bite 38% faster & boosts Rare fish appearances.' },
+        { level: 3, name: 'Starlight Lure', icon: '🌟', cost: 290, waitMultiplier: 0.48, rarityBonus: 0.45, desc: 'Halves wait time & strongly attracts Legendary species.' }
+      ],
+      line: [
+        { level: 0, name: 'Cotton Twine', icon: '🧵', cost: 0, reelSpeedBonus: 1.0, decayDamp: 1.0, desc: 'Standard braided twine for calm waters.' },
+        { level: 1, name: 'Silk Weave Line', icon: '🕸️', cost: 50, reelSpeedBonus: 1.2, decayDamp: 0.82, desc: '+20% faster catch progress & gentler line slip.' },
+        { level: 2, name: 'Moonthread Line', icon: '💎', cost: 160, reelSpeedBonus: 1.45, decayDamp: 0.65, desc: '+45% faster catch progress & ultra-forgiving tension.' }
+      ]
+    };
+
+    const TIME_PRESETS = [
+      {
+        id: 'sunset',
+        name: 'Golden Sunset',
+        shortName: 'Sunset',
+        icon: '🌅',
+        skyTop: 0x3b1d5e,
+        skyBottom: 0xf97316,
+        fogColor: 0xe07a5f,
+        waterColor: 0x1e4e68,
+        waterEmissive: 0x2b192e,
+        sunColor: 0xffae52,
+        sunIntensity: 1.35,
+        ambientColor: 0xd98a6c,
+        ambientIntensity: 0.75,
+        lanternGlow: true,
+        fireflies: false
+      },
+      {
+        id: 'night',
+        name: 'Starry Night',
+        shortName: 'Night',
+        icon: '🌌',
+        skyTop: 0x060b19,
+        skyBottom: 0x16264c,
+        fogColor: 0x0f1c3a,
+        waterColor: 0x0c2742,
+        waterEmissive: 0x06152d,
+        sunColor: 0x7dd3fc,
+        sunIntensity: 0.65,
+        ambientColor: 0x385185,
+        ambientIntensity: 0.6,
+        lanternGlow: true,
+        fireflies: true
+      },
+      {
+        id: 'morning',
+        name: 'Misty Morning',
+        shortName: 'Morning',
+        icon: '🌫️',
+        skyTop: 0x5b8fb9,
+        skyBottom: 0xfbe4d8,
+        fogColor: 0xdbe7f0,
+        waterColor: 0x296d84,
+        waterEmissive: 0x0e2a38,
+        sunColor: 0xfff1d0,
+        sunIntensity: 1.15,
+        ambientColor: 0xc8dce8,
+        ambientIntensity: 0.85,
+        lanternGlow: false,
+        fireflies: false
+      },
+      {
+        id: 'day',
+        name: 'Sunny Afternoon',
+        shortName: 'Sunny',
+        icon: '☀️',
+        skyTop: 0x2563eb,
+        skyBottom: 0x93c5fd,
+        fogColor: 0x93c5fd,
+        waterColor: 0x0284c7,
+        waterEmissive: 0x042f49,
+        sunColor: 0xffffff,
+        sunIntensity: 1.4,
+        ambientColor: 0xbae6fd,
+        ambientIntensity: 0.9,
+        lanternGlow: false,
+        fireflies: false
+      }
+    ];
+
+    const CAMERA_VIEWS = [
+      { id: 'dock', name: 'Dock', pos: { x: 0, y: 4.8, z: 12.2 }, look: { x: 0, y: 0.3, z: -4.5 } },
+      { id: 'boat', name: 'Boat', pos: { x: -4.6, y: 2.7, z: 3.5 }, look: { x: 1.2, y: 0.2, z: -7.5 } },
+      { id: 'panoramic', name: 'Cove', pos: { x: 8.5, y: 7.2, z: 10.5 }, look: { x: -1.5, y: 0.4, z: -3.5 } }
+    ];
+
+    // =========================================================================
+    // 2. PERSISTENT STATE
+    // =========================================================================
+    const DEFAULT_STATE = {
+      coins: 50,
+      totalCaught: 0,
+      streak: 0,
+      rodLevel: 0,
+      lureLevel: 0,
+      lineLevel: 0,
+      zenMode: false,
+      highQuality: true,
+      timeIndex: 0,
+      cameraIndex: 0,
+      discovered: {}, // { [fishId]: { count: number, maxWeight: number } }
+    };
+
+    let state = JSON.parse(JSON.stringify(DEFAULT_STATE));
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem('lumina_cove_save_v1');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          state = Object.assign({}, JSON.parse(JSON.stringify(DEFAULT_STATE)), parsed);
+          if (!state.discovered) state.discovered = {};
+        }
+      } catch (err) {
+        // Fallback to in-memory state if localStorage is restricted
+      }
+    }
+
+    function saveState() {
+      try {
+        localStorage.setItem('lumina_cove_save_v1', JSON.stringify(state));
+      } catch (err) {
+        // Ignore storage errors inside restricted iframe
+      }
+    }
+
+    // =========================================================================
+    // 3. SYNTHESIZED WEB AUDIO ENGINE (Cozy Chimes, Splash, Reel & Ambience)
+    // =========================================================================
+    class CozyAudio {
+      constructor() {
+        this.ctx = null;
+        this.muted = false;
+        this.ambientStarted = false;
+        this.ambientTimer = null;
+      }
+
+      init() {
+        if (!this.ctx) {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if (AudioCtx) {
+            this.ctx = new AudioCtx();
+          }
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+        if (!this.ambientStarted && this.ctx) {
+          this.ambientStarted = true;
+          this.startAmbientLoop();
+        }
+      }
+
+      toggleMute() {
+        this.init();
+        this.muted = !this.muted;
+        return this.muted;
+      }
+
+      playTone(freq, type, duration, gainVal = 0.08, slideFreq = null) {
+        if (this.muted || !this.ctx) return;
+        try {
+          const now = this.ctx.currentTime;
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = type;
+          osc.frequency.setValueAtTime(freq, now);
+          if (slideFreq) {
+            osc.frequency.exponentialRampToValueAtTime(slideFreq, now + duration);
+          }
+          gain.gain.setValueAtTime(0.001, now);
+          gain.gain.linearRampToValueAtTime(gainVal, now + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.0008, now + duration);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(now);
+          osc.stop(now + duration + 0.02);
+        } catch (e) {}
+      }
+
+      playCast() {
+        this.init();
+        this.playTone(260, 'sine', 0.28, 0.09, 580);
+      }
+
+      playSplash() {
+        if (this.muted || !this.ctx) return;
+        try {
+          const now = this.ctx.currentTime;
+          const bufferSize = this.ctx.sampleRate * 0.22;
+          const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+          const data = buffer.getChannelData(0);
+          for (let i = 0; i < bufferSize; i++) {
+            data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.35));
+          }
+          const noise = this.ctx.createBufferSource();
+          noise.buffer = buffer;
+
+          const filter = this.ctx.createBiquadFilter();
+          filter.type = 'bandpass';
+          filter.frequency.setValueAtTime(650, now);
+          filter.Q.setValueAtTime(1.8, now);
+
+          const gain = this.ctx.createGain();
+          gain.gain.setValueAtTime(0.14, now);
+          gain.gain.exponentialRampToValueAtTime(0.005, now + 0.22);
+
+          noise.connect(filter);
+          filter.connect(gain);
+          gain.connect(this.ctx.destination);
+          noise.start(now);
+          this.playTone(320, 'sine', 0.16, 0.06, 180);
+        } catch (e) {}
+      }
+
+      playNibble() {
+        this.playTone(520, 'sine', 0.11, 0.05, 640);
+      }
+
+      playBite() {
+        this.playTone(587.33, 'triangle', 0.14, 0.12, 880);
+        setTimeout(() => this.playTone(880, 'triangle', 0.22, 0.12, 1174.66), 90);
+      }
+
+      playReelTick(inSweetSpot) {
+        this.playTone(inSweetSpot ? 660 : 310, 'sine', 0.045, 0.025);
+      }
+
+      playCatchFanfare() {
+        const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+        notes.forEach((n, idx) => {
+          setTimeout(() => this.playTone(n, 'triangle', 0.38, 0.09), idx * 95);
+        });
+      }
+
+      playUpgrade() {
+        const notes = [440, 554.37, 659.25, 880];
+        notes.forEach((n, idx) => {
+          setTimeout(() => this.playTone(n, 'sine', 0.25, 0.08), idx * 70);
+        });
+      }
+
+      startAmbientLoop() {
+        // Gentle pentatonic wind-chime / kalimba notes every few seconds for a super chill vibe
+        const scale = [261.63, 293.66, 329.63, 392.00, 440.00, 523.25, 659.25];
+        if (this.ambientTimer) clearInterval(this.ambientTimer);
+        this.ambientTimer = setInterval(() => {
+          if (this.muted || !this.ctx || document.hidden) return;
+          if (Math.random() < 0.65) {
+            const note = scale[Math.floor(Math.random() * scale.length)];
+            this.playTone(note, 'sine', 1.4, 0.022);
+          }
+        }, 2800);
+      }
+    }
+
+    const audio = new CozyAudio();
+
+    // =========================================================================
+    // 4. SVG ARTWORK GENERATOR FOR FISH JOURNAL & CATCH MODAL
+    // =========================================================================
+    function createFishSVG(fish, discovered = true) {
+      const c1 = discovered ? fish.colorPrimary : '#334155';
+      const c2 = discovered ? fish.colorSecondary : '#475569';
+      const eye = discovered ? '#0f172a' : '#1e293b';
+      return `
+        <svg viewBox="0 0 160 90" class="w-full h-full drop-shadow-md">
+          <defs>
+            <linearGradient id="grad-${fish.id}-${discovered ? '1' : '0'}" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="${c1}" />
+              <stop offset="100%" stop-color="${c2}" />
+            </linearGradient>
+          </defs>
+          <!-- Tail Fin -->
+          <path d="M122 45 L150 22 Q144 45 150 68 Z" fill="${c1}" opacity="0.9"/>
+          <!-- Dorsal Fin -->
+          <path d="M58 24 Q78 6 102 25 Z" fill="${c2}" opacity="0.85"/>
+          <!-- Ventral Fin -->
+          <path d="M68 65 Q82 80 98 64 Z" fill="${c2}" opacity="0.85"/>
+          <!-- Body -->
+          <ellipse cx="74" cy="45" rx="52" ry="24" fill="url(#grad-${fish.id}-${discovered ? '1' : '0'})" />
+          <!-- Shimmer Stripes -->
+          <path d="M55 26 Q62 45 55 64" stroke="${c2}" stroke-width="3" fill="none" opacity="0.45" stroke-linecap="round"/>
+          <path d="M76 23 Q83 45 76 67" stroke="${c2}" stroke-width="3" fill="none" opacity="0.45" stroke-linecap="round"/>
+          <path d="M96 27 Q102 45 96 63" stroke="${c2}" stroke-width="2.5" fill="none" opacity="0.4" stroke-linecap="round"/>
+          <!-- Pectoral Fin -->
+          <path d="M56 48 Q70 58 62 64 Q48 58 56 48 Z" fill="${c1}" />
+          <!-- Eye -->
+          <circle cx="40" cy="40" r="4.5" fill="#ffffff" opacity="${discovered ? '0.95' : '0.3'}"/>
+          <circle cx="39" cy="40" r="2.5" fill="${eye}"/>
+        </svg>
+      `;
+    }
+
+    // =========================================================================
+    // 5. THREE.JS 3D WORLD & FISHING SIMULATION
+    // =========================================================================
+    let scene, camera, renderer, clock;
+    let waterMesh, waterGeometry, waterBasePositions;
+    let skyDome, sunLight, ambientLight, lanternLight, lanternBulbMat;
+    let rodGroup, rodTipMarker, bobberGroup, fishingLine, fishingLineGeo;
+    let targetRingMesh;
+    let ripples = [];
+    let swimmingFish = [];
+    let clouds = [];
+    let trees = [];
+    let firefliesPoints;
+
+    // Fishing Game Loop State
+    // States: 'IDLE', 'CHARGING', 'CASTING_FLIGHT', 'WAITING', 'BITE', 'REELING', 'CAUGHT_MODAL'
+    let gamePhase = 'IDLE';
+    let aimTarget = new THREE.Vector3(0, 0, -4.5);
+    let castPower = 0.5;
+    let castDirection = 1;
+    let isPointerHoldingButton = false;
+
+    // Bobber Physics & Wait Timers
+    let bobberStartPos = new THREE.Vector3();
+    let bobberTargetPos = new THREE.Vector3(0, 0, -4.5);
+    let flightProgress = 0;
+    let waitTimer = 0;
+    let nibbleCount = 0;
+    let biteWindowTimer = 0;
+    let bobberDipOffset = 0;
+
+    // Reeling Mini-game State
+    let activeFish = null;
+    let activeFishWeight = 1.0;
+    let isHoldingReel = false;
+    let playerCursor = 50; // 0..100
+    let sweetSpotCenter = 50; // 0..100
+    let sweetSpotWidth = 28;
+    let fishTargetPos = 50;
+    let fishMoveTimer = 0;
+    let catchProgress = 35; // 0..100
+    let reelAudioCooldown = 0;
+
+    // Camera Interpolation
+    let targetCamPos = new THREE.Vector3();
+    let targetCamLook = new THREE.Vector3();
+    let currentCamLook = new THREE.Vector3(0, 0.3, -4.5);
+
+    // Raycaster for aiming on water
+    const raycaster = new THREE.Raycaster();
+    const pointerNDC = new THREE.Vector2();
+    const waterPlaneMath = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    let isDraggingWater = false;
+
+    function init3DWorld() {
+      const container = document.getElementById('canvas-container');
+      clock = new THREE.Clock();
+
+      scene = new THREE.Scene();
+      scene.fog = new THREE.FogExp2(0xe07a5f, 0.018);
+
+      camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 200);
+      const initialView = CAMERA_VIEWS[state.cameraIndex] || CAMERA_VIEWS[0];
+      camera.position.set(initialView.pos.x, initialView.pos.y, initialView.pos.z);
+      targetCamPos.copy(camera.position);
+      targetCamLook.set(initialView.look.x, initialView.look.y, initialView.look.z);
+      currentCamLook.copy(targetCamLook);
+      camera.lookAt(currentCamLook);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+      renderer.setSize(container.clientWidth, container.clientHeight);
+      updateRendererPixelRatio();
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      container.innerHTML = '';
+      container.appendChild(renderer.domElement);
+
+      // Lights
+      ambientLight = new THREE.AmbientLight(0xd98a6c, 0.75);
+      scene.add(ambientLight);
+
+      sunLight = new THREE.DirectionalLight(0xffae52, 1.35);
+      sunLight.position.set(18, 26, -22);
+      sunLight.castShadow = true;
+      sunLight.shadow.mapSize.width = 1024;
+      sunLight.shadow.mapSize.height = 1024;
+      sunLight.shadow.camera.near = 5;
+      sunLight.shadow.camera.far = 75;
+      const d = 22;
+      sunLight.shadow.camera.left = -d;
+      sunLight.shadow.camera.right = d;
+      sunLight.shadow.camera.top = d;
+      sunLight.shadow.camera.bottom = -d;
+      scene.add(sunLight);
+
+      buildSkyAndBackdrop();
+      buildWater();
+      buildIslandAndDock();
+      buildCozyBoat();
+      buildLilyPadsAndReeds();
+      buildFishingRodAndBobber();
+      buildUnderwaterFishPool();
+      buildFireflies();
+
+      applyTimePreset(state.timeIndex);
+      window.addEventListener('resize', onWindowResize);
+      setupViewportInteraction(renderer.domElement);
+    }
+
+    function updateRendererPixelRatio() {
+      if (!renderer) return;
+      const maxRatio = state.highQuality ? Math.min(window.devicePixelRatio || 1, 2) : 1;
+      renderer.setPixelRatio(maxRatio);
+    }
+
+    function buildSkyAndBackdrop() {
+      // Gradient Sky Dome
+      const skyGeo = new THREE.SphereGeometry(95, 24, 16);
+      const skyMat = new THREE.MeshBasicMaterial({ color: 0xf97316, side: THREE.BackSide });
+      skyDome = new THREE.Mesh(skyGeo, skyMat);
+      scene.add(skyDome);
+
+      // Distant Low-Poly Mountains around the cove
+      const mountainMat = new THREE.MeshLambertMaterial({ color: 0x334155, flatShading: true });
+      const mountainConfigs = [
+        { x: -28, z: -38, r: 16, h: 22 },
+        { x: -10, z: -44, r: 20, h: 28 },
+        { x: 14, z: -42, r: 18, h: 24 },
+        { x: 32, z: -34, r: 15, h: 19 },
+        { x: -38, z: -18, r: 14, h: 16 },
+        { x: 38, z: -16, r: 14, h: 17 }
+      ];
+      mountainConfigs.forEach(m => {
+        const cone = new THREE.Mesh(new THREE.ConeGeometry(m.r, m.h, 7), mountainMat);
+        cone.position.set(m.x, m.h * 0.42, m.z);
+        cone.rotation.y = Math.random() * Math.PI;
+        scene.add(cone);
+      });
+
+      // Soft Floating Low-Poly Clouds
+      const cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.82, flatShading: true });
+      for (let i = 0; i < 7; i++) {
+        const group = new THREE.Group();
+        const puffs = 3 + Math.floor(Math.random() * 2);
+        for (let p = 0; p < puffs; p++) {
+          const puff = new THREE.Mesh(new THREE.DodecahedronGeometry(1.6 + Math.random() * 1.1, 0), cloudMat);
+          puff.position.set((p - 1) * 1.7, Math.random() * 0.5, (Math.random() - 0.5) * 0.8);
+          puff.scale.y = 0.65;
+          group.add(puff);
+        }
+        group.position.set(-35 + i * 12, 16 + Math.random() * 5, -28 - Math.random() * 12);
+        group.userData = { speed: 0.35 + Math.random() * 0.35 };
+        scene.add(group);
+        clouds.push(group);
+      }
+    }
+
+    function buildWater() {
+      // Subdivided plane for smooth vertex waves
+      waterGeometry = new THREE.PlaneGeometry(110, 110, 48, 48);
+      waterGeometry.rotateX(-Math.PI / 2);
+
+      const posAttr = waterGeometry.attributes.position;
+      waterBasePositions = new Float32Array(posAttr.array.length);
+      waterBasePositions.set(posAttr.array);
+
+      const waterMat = new THREE.MeshPhongMaterial({
+        color: 0x1e4e68,
+        emissive: 0x162238,
+        specular: 0xfde68a,
+        shininess: 75,
+        flatShading: true,
+        transparent: true,
+        opacity: 0.88
+      });
+
+      waterMesh = new THREE.Mesh(waterGeometry, waterMat);
+      waterMesh.receiveShadow = true;
+      scene.add(waterMesh);
+
+      // Sandy Underwater Seabed for depth perception
+      const bedGeo = new THREE.PlaneGeometry(110, 110);
+      bedGeo.rotateX(-Math.PI / 2);
+      const bedMat = new THREE.MeshLambertMaterial({ color: 0x0f293a });
+      const bedMesh = new THREE.Mesh(bedGeo, bedMat);
+      bedMesh.position.y = -2.2;
+      scene.add(bedMesh);
+
+      // Aiming Target Ring on Water
+      const ringGeo = new THREE.RingGeometry(0.32, 0.45, 24);
+      ringGeo.rotateX(-Math.PI / 2);
+      const ringMat = new THREE.MeshBasicMaterial({
+        color: 0xfbbf24,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.75
+      });
+      targetRingMesh = new THREE.Mesh(ringGeo, ringMat);
+      targetRingMesh.position.set(aimTarget.x, 0.06, aimTarget.z);
+      scene.add(targetRingMesh);
+    }
+
+    function buildIslandAndDock() {
+      // Main Shore Island behind & around the dock
+      const islandMat = new THREE.MeshLambertMaterial({ color: 0x4d7c5d, flatShading: true });
+      const sandMat = new THREE.MeshLambertMaterial({ color: 0xd6b88d, flatShading: true });
+
+      const shoreSand = new THREE.Mesh(new THREE.CylinderGeometry(10, 13, 1.4, 12), sandMat);
+      shoreSand.position.set(0, -0.35, 13.5);
+      shoreSand.scale.set(1.6, 1, 0.85);
+      shoreSand.receiveShadow = true;
+      scene.add(shoreSand);
+
+      const shoreGrass = new THREE.Mesh(new THREE.CylinderGeometry(8.5, 10.2, 1.5, 12), islandMat);
+      shoreGrass.position.set(0, 0.15, 14.5);
+      shoreGrass.scale.set(1.5, 1, 0.8);
+      shoreGrass.receiveShadow = true;
+      scene.add(shoreGrass);
+
+      // Side Decorative Islets
+      const leftIslet = new THREE.Mesh(new THREE.CylinderGeometry(4.2, 5.8, 1.6, 9), islandMat);
+      leftIslet.position.set(-14, -0.1, -6);
+      leftIslet.receiveShadow = true;
+      scene.add(leftIslet);
+
+      const rightIslet = new THREE.Mesh(new THREE.CylinderGeometry(3.5, 5.0, 1.4, 9), islandMat);
+      rightIslet.position.set(14, -0.2, -4);
+      rightIslet.receiveShadow = true;
+      scene.add(rightIslet);
+
+      // Swaying Pine Trees
+      const treePositions = [
+        { x: -6.5, y: 0.8, z: 12.0, s: 1.1 },
+        { x: -4.2, y: 0.8, z: 13.8, s: 0.85 },
+        { x: 5.5, y: 0.8, z: 12.2, s: 1.15 },
+        { x: 7.8, y: 0.7, z: 13.5, s: 0.9 },
+        { x: -14.2, y: 0.6, z: -6.2, s: 1.05 },
+        { x: -12.5, y: 0.5, z: -5.0, s: 0.75 },
+        { x: 14.0, y: 0.5, z: -4.2, s: 0.95 }
+      ];
+      treePositions.forEach((tp, idx) => {
+        const tree = createPineTree(tp.s);
+        tree.position.set(tp.x, tp.y, tp.z);
+        tree.userData = { phase: idx * 1.1 };
+        scene.add(tree);
+        trees.push(tree);
+      });
+
+      // Wooden Fishing Dock
+      const dockGroup = new THREE.Group();
+      const woodMat = new THREE.MeshLambertMaterial({ color: 0x855836, flatShading: true });
+      const postMat = new THREE.MeshLambertMaterial({ color: 0x5c3a21, flatShading: true });
+
+      // Planks
+      for (let i = 0; i < 14; i++) {
+        const plank = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.16, 0.42), woodMat);
+        plank.position.set(0, 0.75, 4.2 + i * 0.48);
+        plank.castShadow = true;
+        plank.receiveShadow = true;
+        dockGroup.add(plank);
+      }
+
+      // Support Pilings
+      const postCoords = [
+        [-1.35, 4.4], [1.35, 4.4],
+        [-1.35, 7.2], [1.35, 7.2],
+        [-1.35, 10.0], [1.35, 10.0]
+      ];
+      postCoords.forEach(([px, pz]) => {
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 2.8, 8), postMat);
+        post.position.set(px, 0.1, pz);
+        post.castShadow = true;
+        dockGroup.add(post);
+      });
+
+      // Cozy Lantern Post at the tip of the dock
+      const lanternPole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 2.3, 8), postMat);
+      lanternPole.position.set(-1.35, 1.9, 4.4);
+      dockGroup.add(lanternPole);
+
+      const lanternArm = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.08, 0.08), postMat);
+      lanternArm.position.set(-1.1, 2.95, 4.4);
+      dockGroup.add(lanternArm);
+
+      lanternBulbMat = new THREE.MeshBasicMaterial({ color: 0xfef08a });
+      const lanternBulb = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 10), lanternBulbMat);
+      lanternBulb.position.set(-0.85, 2.72, 4.4);
+      dockGroup.add(lanternBulb);
+
+      lanternLight = new THREE.PointLight(0xfbbf24, 1.4, 14);
+      lanternLight.position.set(-0.85, 2.6, 4.4);
+      dockGroup.add(lanternLight);
+
+      // Wooden Tackle Crate & Bucket on Dock
+      const crate = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.5, 0.55), woodMat);
+      crate.position.set(1.05, 1.08, 5.1);
+      crate.rotation.y = -0.25;
+      crate.castShadow = true;
+      dockGroup.add(crate);
+
+      scene.add(dockGroup);
+    }
+
+    function createPineTree(scale = 1) {
+      const group = new THREE.Group();
+      const trunkMat = new THREE.MeshLambertMaterial({ color: 0x6b4423, flatShading: true });
+      const leafMat = new THREE.MeshLambertMaterial({ color: 0x2d6a4f, flatShading: true });
+
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.32, 1.4, 7), trunkMat);
+      trunk.position.y = 0.7;
+      trunk.castShadow = true;
+      group.add(trunk);
+
+      const tiers = [
+        { r: 1.35, h: 1.8, y: 1.8 },
+        { r: 1.05, h: 1.6, y: 2.7 },
+        { r: 0.72, h: 1.4, y: 3.5 }
+      ];
+      tiers.forEach(t => {
+        const cone = new THREE.Mesh(new THREE.ConeGeometry(t.r, t.h, 7), leafMat);
+        cone.position.y = t.y;
+        cone.castShadow = true;
+        group.add(cone);
+      });
+
+      group.scale.setScalar(scale);
+      return group;
+    }
+
+    function buildCozyBoat() {
+      const boatGroup = new THREE.Group();
+      const hullMat = new THREE.MeshLambertMaterial({ color: 0x9a3412, flatShading: true });
+      const benchMat = new THREE.MeshLambertMaterial({ color: 0xd97706, flatShading: true });
+
+      const hull = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.55, 3.4), hullMat);
+      hull.position.y = 0.15;
+      hull.castShadow = true;
+      boatGroup.add(hull);
+
+      const bow = new THREE.Mesh(new THREE.ConeGeometry(1.2, 1.3, 4), hullMat);
+      bow.rotation.x = -Math.PI / 2;
+      bow.rotation.z = Math.PI / 4;
+      bow.position.set(0, 0.15, -2.3);
+      boatGroup.add(bow);
+
+      const bench = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.12, 0.5), benchMat);
+      bench.position.set(0, 0.42, 0);
+      boatGroup.add(bench);
+
+      boatGroup.position.set(-4.8, 0.02, 1.8);
+      boatGroup.rotation.y = -0.35;
+      scene.add(boatGroup);
+      boatGroup.userData = { basePos: boatGroup.position.clone() };
+      window.cozyBoat = boatGroup;
+    }
+
+    function buildLilyPadsAndReeds() {
+      const padMat = new THREE.MeshLambertMaterial({ color: 0x4ade80, flatShading: true });
+      const flowerMat = new THREE.MeshLambertMaterial({ color: 0xf472b6, flatShading: true });
+
+      const padCoords = [
+        [-3.2, -2.5], [-2.5, -3.1], [-3.8, -3.4],
+        [3.6, -1.8], [4.3, -2.4], [3.1, -2.9],
+        [-6.5, -6.5], [6.2, -5.8]
+      ];
+      padCoords.forEach(([x, z], idx) => {
+        const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 0.04, 10), padMat);
+        pad.position.set(x, 0.04, z);
+        scene.add(pad);
+        if (idx % 3 === 0) {
+          const lotus = new THREE.Mesh(new THREE.DodecahedronGeometry(0.14, 0), flowerMat);
+          lotus.position.set(x, 0.12, z);
+          scene.add(lotus);
+        }
+      });
+    }
+
+    function buildFishingRodAndBobber() {
+      // 3D Fishing Rod anchored near the player on the dock
+      rodGroup = new THREE.Group();
+      const rodMat = new THREE.MeshLambertMaterial({ color: 0xd97706 });
+      const handleMat = new THREE.MeshLambertMaterial({ color: 0x451a03 });
+
+      const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.9, 8), handleMat);
+      handle.position.set(0, 0.45, 0);
+      rodGroup.add(handle);
+
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.045, 3.6, 8), rodMat);
+      shaft.position.set(0, 2.5, 0);
+      rodGroup.add(shaft);
+
+      rodTipMarker = new THREE.Object3D();
+      rodTipMarker.position.set(0, 4.3, 0);
+      rodGroup.add(rodTipMarker);
+
+      rodGroup.position.set(0.55, 1.35, 5.2);
+      rodGroup.rotation.x = -0.85;
+      rodGroup.rotation.z = -0.08;
+      scene.add(rodGroup);
+
+      // 3D Red-and-White Bobber
+      bobberGroup = new THREE.Group();
+      const topSphere = new THREE.Mesh(
+        new THREE.SphereGeometry(0.18, 12, 10, 0, Math.PI * 2, 0, Math.PI / 2),
+        new THREE.MeshLambertMaterial({ color: 0xef4444 })
+      );
+      const bottomSphere = new THREE.Mesh(
+        new THREE.SphereGeometry(0.18, 12, 10, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2),
+        new THREE.MeshLambertMaterial({ color: 0xffffff })
+      );
+      const antenna = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.025, 0.025, 0.26, 6),
+        new THREE.MeshBasicMaterial({ color: 0xfbbf24 })
+      );
+      antenna.position.y = 0.22;
+      bobberGroup.add(topSphere, bottomSphere, antenna);
+      bobberGroup.position.set(0.55, 2.2, 2.6);
+      scene.add(bobberGroup);
+
+      // Curved 3D Fishing Line (20 segments)
+      const linePoints = [];
+      for (let i = 0; i <= 20; i++) {
+        linePoints.push(new THREE.Vector3(0, 0, 0));
+      }
+      fishingLineGeo = new THREE.BufferGeometry().setFromPoints(linePoints);
+      const lineMat = new THREE.LineBasicMaterial({ color: 0xe2e8f0, transparent: true, opacity: 0.78 });
+      fishingLine = new THREE.Line(fishingLineGeo, lineMat);
+      scene.add(fishingLine);
+    }
+
+    function buildUnderwaterFishPool() {
+      const silhouetteMat = new THREE.MeshLambertMaterial({
+        color: 0x082f49,
+        transparent: true,
+        opacity: 0.62,
+        flatShading: true
+      });
+
+      for (let i = 0; i < 9; i++) {
+        const fishGroup = new THREE.Group();
+        const body = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.75, 6), silhouetteMat);
+        body.rotation.x = Math.PI / 2;
+        body.scale.y = 0.55;
+        fishGroup.add(body);
+
+        const tail = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.28, 4), silhouetteMat);
+        tail.rotation.x = -Math.PI / 2;
+        tail.position.z = -0.45;
+        fishGroup.add(tail);
+
+        const scale = 0.75 + Math.random() * 0.75;
+        fishGroup.scale.setScalar(scale);
+
+        fishGroup.position.set(
+          (Math.random() - 0.5) * 16,
+          -0.38 - Math.random() * 0.35,
+          -1.5 - Math.random() * 14
+        );
+        const angle = Math.random() * Math.PI * 2;
+        fishGroup.rotation.y = angle;
+        fishGroup.userData = {
+          speed: 0.7 + Math.random() * 0.7,
+          turnTimer: 1 + Math.random() * 3,
+          targetAngle: angle,
+          tailMesh: tail,
+          wiggleOffset: Math.random() * 10
+        };
+        scene.add(fishGroup);
+        swimmingFish.push(fishGroup);
+      }
+    }
+
+    function buildFireflies() {
+      const count = 45;
+      const positions = new Float32Array(count * 3);
+      for (let i = 0; i < count; i++) {
+        positions[i * 3] = (Math.random() - 0.5) * 24;
+        positions[i * 3 + 1] = 0.4 + Math.random() * 4.5;
+        positions[i * 3 + 2] = -12 + Math.random() * 24;
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      const mat = new THREE.PointsMaterial({
+        color: 0xfef08a,
+        size: 0.22,
+        transparent: true,
+        opacity: 0.85
+      });
+      firefliesPoints = new THREE.Points(geo, mat);
+      scene.add(firefliesPoints);
+    }
+
+    function spawnWaterRipple(x, z, maxScale = 1.6, color = 0xe0f2fe) {
+      const geo = new THREE.RingGeometry(0.12, 0.19, 24);
+      geo.rotateX(-Math.PI / 2);
+      const mat = new THREE.MeshBasicMaterial({
+        color: color,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.75
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(x, 0.05, z);
+      scene.add(mesh);
+      ripples.push({ mesh, age: 0, maxAge: 1.35, maxScale });
+    }
+
+    // =========================================================================
+    // 6. ENVIRONMENT & CAMERA CONTROLS
+    // =========================================================================
+    function applyTimePreset(index) {
+      state.timeIndex = index % TIME_PRESETS.length;
+      const p = TIME_PRESETS[state.timeIndex];
+
+      skyDome.material.color.setHex(p.skyBottom);
+      scene.fog.color.setHex(p.fogColor);
+      waterMesh.material.color.setHex(p.waterColor);
+      waterMesh.material.emissive.setHex(p.waterEmissive);
+      sunLight.color.setHex(p.sunColor);
+      sunLight.intensity = p.sunIntensity;
+      ambientLight.color.setHex(p.ambientColor);
+      ambientLight.intensity = p.ambientIntensity;
+
+      lanternLight.intensity = p.lanternGlow ? 1.5 : 0.1;
+      lanternBulbMat.color.setHex(p.lanternGlow ? 0xfef08a : 0x94a3b8);
+      if (firefliesPoints) {
+        firefliesPoints.visible = p.fireflies;
+      }
+
+      document.getElementById('env-label').textContent = p.name;
+      document.getElementById('time-icon').textContent = p.icon;
+      document.getElementById('time-btn-text').textContent = p.shortName;
+      saveState();
+    }
+
+    function cycleCameraView() {
+      state.cameraIndex = (state.cameraIndex + 1) % CAMERA_VIEWS.length;
+      const v = CAMERA_VIEWS[state.cameraIndex];
+      targetCamPos.set(v.pos.x, v.pos.y, v.pos.z);
+      targetCamLook.set(v.look.x, v.look.y, v.look.z);
+      document.getElementById('cam-btn-text').textContent = v.name;
+      saveState();
+    }
+
+    function onWindowResize() {
+      const container = document.getElementById('canvas-container');
+      if (!container || !renderer || !camera) return;
+      camera.aspect = container.clientWidth / container.clientHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(container.clientWidth, container.clientHeight);
+    }
+
+    // =========================================================================
+    // 7. FISHING MECHANICS & STATE TRANSITIONS
+    // =========================================================================
+    function setStatusText(htmlText) {
+      const el = document.getElementById('status-banner');
+      if (el) el.innerHTML = htmlText;
+    }
+
+    function updateMainButtonUI() {
+      const btn = document.getElementById('main-action-btn');
+      const icon = document.getElementById('main-action-icon');
+      const text = document.getElementById('main-action-text');
+      btn.classList.remove('pulse-ring');
+
+      if (gamePhase === 'IDLE' || gamePhase === 'CHARGING') {
+        icon.textContent = '🎣';
+        text.textContent = gamePhase === 'CHARGING' ? 'RELEASE TO CAST' : 'HOLD TO CAST';
+        btn.className = 'relative min-w-[200px] sm:min-w-[230px] py-3.5 px-7 rounded-full font-bold text-sm sm:text-base tracking-wide shadow-2xl transition-transform active:scale-95 bg-gradient-to-r from-amber-400 to-orange-400 text-slate-950 border-2 border-amber-200 flex items-center justify-center gap-2.5';
+      } else if (gamePhase === 'CASTING_FLIGHT' || gamePhase === 'WAITING') {
+        icon.textContent = '🌊';
+        text.textContent = 'PULL LINE IN';
+        btn.className = 'relative min-w-[200px] sm:min-w-[230px] py-3.5 px-7 rounded-full font-bold text-sm sm:text-base tracking-wide shadow-2xl transition-transform active:scale-95 bg-slate-800/90 hover:bg-slate-700 text-slate-100 border-2 border-slate-500 flex items-center justify-center gap-2.5';
+      } else if (gamePhase === 'BITE') {
+        icon.textContent = '⚡';
+        text.textContent = 'HOOK FISH NOW!';
+        btn.className = 'pulse-ring relative min-w-[200px] sm:min-w-[230px] py-3.5 px-7 rounded-full font-extrabold text-sm sm:text-base tracking-wide shadow-2xl transition-transform active:scale-95 bg-gradient-to-r from-emerald-400 to-teal-300 text-slate-950 border-2 border-white flex items-center justify-center gap-2.5';
+      } else if (gamePhase === 'REELING') {
+        icon.textContent = '🌀';
+        text.textContent = 'HOLD TO REEL IN';
+        btn.className = 'relative min-w-[200px] sm:min-w-[230px] py-3.5 px-7 rounded-full font-extrabold text-sm sm:text-base tracking-wide shadow-2xl transition-transform active:scale-95 bg-gradient-to-r from-sky-400 to-emerald-400 text-slate-950 border-2 border-white flex items-center justify-center gap-2.5';
+      }
+    }
+
+    function startChargingCast() {
+      if (gamePhase !== 'IDLE') return;
+      audio.init();
+      gamePhase = 'CHARGING';
+      castPower = 0.25;
+      castDirection = 1;
+      document.getElementById('cast-power-overlay').classList.remove('hidden');
+      updateMainButtonUI();
+    }
+
+    function releaseCast() {
+      if (gamePhase !== 'CHARGING') return;
+      document.getElementById('cast-power-overlay').classList.add('hidden');
+      gamePhase = 'CASTING_FLIGHT';
+      audio.playCast();
+
+      const rodUpgrade = UPGRADES.rod[state.rodLevel];
+      const distMultiplier = 0.65 + castPower * (0.75 + rodUpgrade.castBonus);
+
+      const dir = new THREE.Vector3(aimTarget.x, 0, aimTarget.z - 3.5).normalize();
+      const baseDist = Math.min(Math.max(aimTarget.distanceTo(new THREE.Vector3(0, 0, 3.5)), 4.0), 15.0);
+      const finalDist = Math.min(baseDist * distMultiplier, 17.5);
+
+      bobberGroup.getWorldPosition(bobberStartPos);
+      bobberTargetPos.set(
+         THREE.MathUtils.clamp(dir.x * finalDist, -9.5, 9.5),
+         0,
+         THREE.MathUtils.clamp(3.2 - Math.abs(dir.z) * finalDist, -15.5, 1.2)
+      );
+
+      flightProgress = 0;
+      targetRingMesh.visible = false;
+      setStatusText('Casting line out into the cove...');
+      updateMainButtonUI();
+    }
+
+    function startWaitingOnWater() {
+      gamePhase = 'WAITING';
+      audio.playSplash();
+      spawnWaterRipple(bobberTargetPos.x, bobberTargetPos.z, 2.2, 0xffffff);
+
+      const lureUpgrade = UPGRADES.lure[state.lureLevel];
+      // Wait between 2.2 and 5.2 seconds scaled by lure upgrade
+      waitTimer = (2.4 + Math.random() * 3.0) * lureUpgrade.waitMultiplier;
+      nibbleCount = 1 + Math.floor(Math.random() * 2);
+      setStatusText('Waiting peacefully for a nibble... 🍃');
+      updateMainButtonUI();
+
+      // Attract closest underwater fish toward the bobber
+      if (swimmingFish.length > 0) {
+        const swimmer = swimmingFish[0];
+        const dx = bobberTargetPos.x - swimmer.position.x;
+        const dz = bobberTargetPos.z - swimmer.position.z;
+        swimmer.userData.targetAngle = Math.atan2(dx, dz);
+      }
+    }
+
+    function triggerBite() {
+      gamePhase = 'BITE';
+      biteWindowTimer = 2.4; // Generous 2.4s window to tap Hook
+      bobberDipOffset = -0.35;
+      audio.playBite();
+      spawnWaterRipple(bobberTargetPos.x, bobberTargetPos.z, 2.8, 0xfbbf24);
+      document.getElementById('bite-indicator').classList.remove('hidden');
+      setStatusText('<strong class="text-amber-300">Fish on the line!</strong> Tap Hook right now!');
+      updateMainButtonUI();
+    }
+
+    function pickFishForCatch() {
+      const currentTimeId = TIME_PRESETS[state.timeIndex].id;
+      const lureBonus = UPGRADES.lure[state.lureLevel].rarityBonus;
+      const depthFactor = Math.min(Math.abs(bobberTargetPos.z) / 14.0, 1.0);
+
+      // Weight table for each species
+      const weightedPool = FISH_SPECIES.map(fish => {
+        let w = 10;
+        if (fish.rarity === 'Common') w = 48 - lureBonus * 25;
+        if (fish.rarity === 'Uncommon') w = 28 + lureBonus * 20 + depthFactor * 8;
+        if (fish.rarity === 'Rare') w = 13 + lureBonus * 24 + depthFactor * 12;
+        if (fish.rarity === 'Legendary') w = 4 + lureBonus * 18 + depthFactor * 10;
+        if (fish.rarity === 'Mythic') w = 1.5 + lureBonus * 12 + depthFactor * 8;
+
+        // Time-of-day affinity bonus
+        if (fish.prefTime === currentTimeId) {
+          w *= 1.85;
+        }
+        return { fish, weight: Math.max(w, 1) };
+      });
+
+      const totalW = weightedPool.reduce((acc, item) => acc + item.weight, 0);
+      let roll = Math.random() * totalW;
+      for (const item of weightedPool) {
+        roll -= item.weight;
+        if (roll <= 0) return item.fish;
+      }
+      return FISH_SPECIES[0];
+    }
+
+    function startHookAndReel() {
+      document.getElementById('bite-indicator').classList.add('hidden');
+      activeFish = pickFishForCatch();
+      const randCurve = Math.pow(Math.random(), 0.75);
+      activeFishWeight = +(activeFish.baseWeight + randCurve * (activeFish.maxWeight - activeFish.baseWeight)).toFixed(2);
+
+      // If Zen Mode is enabled, catch smoothly and immediately!
+      if (state.zenMode) {
+        completeCatchSuccess();
+        return;
+      }
+
+      gamePhase = 'REELING';
+      const rodBonus = UPGRADES.rod[state.rodLevel].sweetSpotBonus;
+      sweetSpotWidth = Math.min(26 + rodBonus, 46);
+      sweetSpotCenter = 50;
+      fishTargetPos = 50;
+      playerCursor = 50;
+      catchProgress = 32;
+      fishMoveTimer = 0.6;
+
+      document.getElementById('reel-fish-hint').innerHTML = `<span>🐟</span><span>Reeling in a <strong>${activeFish.rarity}</strong> swimmer!</span>`;
+      document.getElementById('reel-overlay').classList.remove('hidden');
+      setStatusText('Keep the amber marker inside the green <strong class="text-emerald-300">Sweet Spot</strong>!');
+      updateMainButtonUI();
+    }
+
+    function resetToIdle(statusMsg = 'Drag on the water to aim, or hold <span class="text-amber-300 font-semibold">Cast Line</span> to fish') {
+      gamePhase = 'IDLE';
+      isHoldingReel = false;
+      isPointerHoldingButton = false;
+      bobberDipOffset = 0;
+      document.getElementById('bite-indicator').classList.add('hidden');
+      document.getElementById('reel-overlay').classList.add('hidden');
+      document.getElementById('cast-power-overlay').classList.add('hidden');
+      targetRingMesh.visible = true;
+      setStatusText(statusMsg);
+      updateMainButtonUI();
+    }
+
+    function completeCatchSuccess() {
+      gamePhase = 'CAUGHT_MODAL';
+      isHoldingReel = false;
+      document.getElementById('reel-overlay').classList.add('hidden');
+      document.getElementById('bite-indicator').classList.add('hidden');
+      audio.playCatchFanfare();
+
+      state.totalCaught += 1;
+      state.streak += 1;
+
+      const prevRecord = state.discovered[activeFish.id];
+      const isNewSpecies = !prevRecord;
+      if (!prevRecord) {
+        state.discovered[activeFish.id] = { count: 1, maxWeight: activeFishWeight };
+        document.getElementById('journal-badge').classList.remove('hidden');
+      } else {
+        prevRecord.count += 1;
+        if (activeFishWeight > prevRecord.maxWeight) {
+          prevRecord.maxWeight = activeFishWeight;
+        }
+      }
+
+      const weightRatio = activeFishWeight / activeFish.baseWeight;
+      const coinValue = Math.round(activeFish.baseValue * (0.75 + weightRatio * 0.35));
+      const releaseBonus = Math.round(coinValue * 1.15); // Eco-friendly release bonus
+
+      // Populate Catch Modal
+      const rarityBadge = document.getElementById('catch-rarity-badge');
+      rarityBadge.textContent = activeFish.rarity;
+      const rarityStyles = {
+        Common: 'bg-sky-500/20 text-sky-300 border-sky-400/30',
+        Uncommon: 'bg-emerald-500/20 text-emerald-300 border-emerald-400/30',
+        Rare: 'bg-purple-500/20 text-purple-300 border-purple-400/30',
+        Legendary: 'bg-amber-500/25 text-amber-300 border-amber-400/40',
+        Mythic: 'bg-rose-500/25 text-rose-300 border-rose-400/40'
+      };
+      rarityBadge.className = `text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full border ${rarityStyles[activeFish.rarity] || rarityStyles.Common}`;
+
+      const newBadge = document.getElementById('catch-new-badge');
+      if (isNewSpecies) {
+        newBadge.classList.remove('hidden');
+      } else {
+        newBadge.classList.add('hidden');
+      }
+
+      document.getElementById('catch-svg-box').innerHTML = createFishSVG(activeFish, true);
+      document.getElementById('catch-fish-name').textContent = activeFish.name;
+      document.getElementById('catch-fish-lore').textContent = activeFish.lore;
+      document.getElementById('catch-fish-weight').textContent = `${activeFishWeight.toFixed(2)} kg`;
+      document.getElementById('catch-fish-value').textContent = `+${coinValue} 🪙`;
+
+      const keepBtn = document.getElementById('btn-keep-fish');
+      const releaseBtn = document.getElementById('btn-release-fish');
+      document.getElementById('keep-coin-val').textContent = coinValue;
+      document.getElementById('release-coin-val').textContent = releaseBonus;
+
+      keepBtn.onclick = () => claimCatchReward(coinValue, false);
+      releaseBtn.onclick = () => claimCatchReward(releaseBonus, true);
+
+      document.getElementById('catch-modal').classList.remove('hidden');
+      updateHUDCounters();
+      saveState();
+    }
+
+    function claimCatchReward(coinsEarned, released) {
+      state.coins += coinsEarned;
+      document.getElementById('catch-modal').classList.add('hidden');
+      updateHUDCounters();
+      saveState();
+      resetToIdle(
+        released
+          ? `Released ${activeFish.name} peacefully back into the cove (+${coinsEarned} 🪙)`
+          : `Added ${activeFish.name} to your basket (+${coinsEarned} 🪙)`
+      );
+    }
+
+    // =========================================================================
+    // 8. MAIN ANIMATION & SIMULATION LOOP
+    // =========================================================================
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = Math.min(clock.getDelta(), 0.1);
+      const elapsed = clock.getElapsedTime();
+
+      // 1. Animate Vertex Waves on Water
+      if (waterGeometry && waterBasePositions) {
+        const pos = waterGeometry.attributes.position;
+        for (let i = 0; i < pos.count; i++) {
+          const bx = waterBasePositions[i * 3];
+          const bz = waterBasePositions[i * 3 + 2];
+          const wave =
+            Math.sin(bx * 0.35 + elapsed * 1.6) * 0.065 +
+            Math.cos(bz * 0.42 + elapsed * 1.3) * 0.055;
+          pos.setY(i, wave);
+        }
+        pos.needsUpdate = true;
+      }
+
+      // 2. Gently Bob Cozy Boat & Sway Trees & Drift Clouds
+      if (window.cozyBoat) {
+        window.cozyBoat.position.y = 0.04 + Math.sin(elapsed * 1.8) * 0.05;
+        window.cozyBoat.rotation.z = Math.sin(elapsed * 1.2) * 0.035;
+      }
+      for (const tree of trees) {
+        tree.rotation.z = Math.sin(elapsed * 1.1 + tree.userData.phase) * 0.025;
+      }
+      for (const cloud of clouds) {
+        cloud.position.x += cloud.userData.speed * dt;
+        if (cloud.position.x > 42) cloud.position.x = -42;
+      }
+
+      // 3. Animate Fireflies at Night
+      if (firefliesPoints && firefliesPoints.visible) {
+        const fPos = firefliesPoints.geometry.attributes.position;
+        for (let i = 0; i < fPos.count; i++) {
+          let y = fPos.getY(i) + Math.sin(elapsed * 2 + i) * 0.006;
+          fPos.setY(i, y);
+        }
+        fPos.needsUpdate = true;
+      }
+
+      // 4. Update Expanding Water Ripples
+      for (let i = ripples.length - 1; i >= 0; i--) {
+        const r = ripples[i];
+        r.age += dt;
+        const t = r.age / r.maxAge;
+        if (t >= 1) {
+          scene.remove(r.mesh);
+          r.mesh.geometry.dispose();
+          r.mesh.material.dispose();
+          ripples.splice(i, 1);
+        } else {
+          const s = 1 + t * (r.maxScale * 4);
+          r.mesh.scale.set(s, 1, s);
+          r.mesh.material.opacity = (1 - t) * 0.65;
+        }
+      }
+
+      // 5. Update Underwater Fish Silhouettes
+      swimmingFish.forEach((f, idx) => {
+        const ud = f.userData;
+        ud.turnTimer -= dt;
+        if (ud.turnTimer <= 0) {
+          ud.turnTimer = 2.0 + Math.random() * 3.5;
+          if ((gamePhase === 'WAITING' || gamePhase === 'BITE') && idx === 0) {
+            const dx = bobberTargetPos.x - f.position.x;
+            const dz = bobberTargetPos.z - f.position.z;
+            ud.targetAngle = Math.atan2(dx, dz);
+          } else {
+            ud.targetAngle += (Math.random() - 0.5) * 2.2;
+          }
+        }
+        // Keep fish inside the cove bounds
+        if (Math.abs(f.position.x) > 12 || f.position.z > 1.5 || f.position.z < -16) {
+          const dx = 0 - f.position.x;
+          const dz = -6 - f.position.z;
+          ud.targetAngle = Math.atan2(dx, dz);
+        }
+
+        // Smooth angle interpolation
+        const diff = Math.atan2(Math.sin(ud.targetAngle - f.rotation.y), Math.cos(ud.targetAngle - f.rotation.y));
+        f.rotation.y += diff * dt * 2.2;
+
+        const speedMult = (gamePhase === 'REELING' && idx === 0) ? 2.4 : 1.0;
+        f.position.x += Math.sin(f.rotation.y) * ud.speed * speedMult * dt;
+        f.position.z += Math.cos(f.rotation.y) * ud.speed * speedMult * dt;
+        ud.tailMesh.rotation.y = Math.sin(elapsed * 8 + ud.wiggleOffset) * 0.35;
+      });
+
+      // 6. Update Aiming Ring Pulse
+      if (targetRingMesh.visible) {
+        const pulse = 1 + Math.sin(elapsed * 3.5) * 0.12;
+        targetRingMesh.scale.set(pulse, 1, pulse);
+        targetRingMesh.position.x = THREE.MathUtils.lerp(targetRingMesh.position.x, aimTarget.x, dt * 12);
+        targetRingMesh.position.z = THREE.MathUtils.lerp(targetRingMesh.position.z, aimTarget.z, dt * 12);
+      }
+
+      // 7. Handle Game Phase Logic
+      if (gamePhase === 'CHARGING') {
+        castPower += castDirection * dt * 0.95;
+        if (castPower >= 1.0) {
+          castPower = 1.0;
+          castDirection = -1;
+        } else if (castPower <= 0.15) {
+          castPower = 0.15;
+          castDirection = 1;
+        }
+        const pct = Math.round(castPower * 100);
+        document.getElementById('cast-power-bar').style.width = `${pct}%`;
+        document.getElementById('cast-power-label').textContent = `${pct}%`;
+        rodGroup.rotation.x = THREE.MathUtils.lerp(rodGroup.rotation.x, -0.45, dt * 6);
+      } else if (gamePhase === 'CASTING_FLIGHT') {
+        rodGroup.rotation.x = THREE.MathUtils.lerp(rodGroup.rotation.x, -1.05, dt * 10);
+        flightProgress += dt * 1.9;
+        if (flightProgress >= 1.0) {
+          bobberGroup.position.copy(bobberTargetPos);
+          startWaitingOnWater();
+        } else {
+          bobberGroup.position.lerpVectors(bobberStartPos, bobberTargetPos, flightProgress);
+          bobberGroup.position.y += Math.sin(flightProgress * Math.PI) * 3.2;
+        }
+      } else if (gamePhase === 'WAITING') {
+        rodGroup.rotation.x = THREE.MathUtils.lerp(rodGroup.rotation.x, -0.92, dt * 4);
+        bobberDipOffset = THREE.MathUtils.lerp(bobberDipOffset, 0, dt * 5);
+        bobberGroup.position.set(
+          bobberTargetPos.x,
+          Math.sin(elapsed * 2.5) * 0.05 + bobberDipOffset,
+          bobberTargetPos.z
+        );
+
+        waitTimer -= dt;
+        if (waitTimer <= 0) {
+          if (nibbleCount > 0) {
+            nibbleCount--;
+            bobberDipOffset = -0.14;
+            audio.playNibble();
+            spawnWaterRipple(bobberTargetPos.x, bobberTargetPos.z, 1.1, 0xbae6fd);
+            setStatusText('<em>*Bloop*...</em> Something curious is nibbling the bait...');
+            waitTimer = 1.1 + Math.random() * 1.1;
+          } else {
+            triggerBite();
+          }
+        }
+      } else if (gamePhase === 'BITE') {
+        rodGroup.rotation.x = THREE.MathUtils.lerp(rodGroup.rotation.x, -1.12, dt * 8);
+        bobberDipOffset = THREE.MathUtils.lerp(bobberDipOffset, -0.25, dt * 6);
+        bobberGroup.position.set(
+          bobberTargetPos.x + Math.sin(elapsed * 22) * 0.06,
+          bobberDipOffset,
+          bobberTargetPos.z + Math.cos(elapsed * 22) * 0.06
+        );
+        biteWindowTimer -= dt;
+        if (biteWindowTimer <= 0) {
+          state.streak = 0;
+          updateHUDCounters();
+          resetToIdle('The fish slipped away gently. Hold <span class="text-amber-300 font-semibold">Cast Line</span> to try again!');
+        }
+      } else if (gamePhase === 'REELING') {
+        updateReelingMiniGame(dt, elapsed);
+      } else {
+        // IDLE or MODAL: hang bobber gently below rod tip
+        rodGroup.rotation.x = THREE.MathUtils.lerp(rodGroup.rotation.x, -0.85, dt * 5);
+        const tipWorld = new THREE.Vector3();
+        rodTipMarker.getWorldPosition(tipWorld);
+        bobberGroup.position.set(
+          tipWorld.x + Math.sin(elapsed * 2.0) * 0.08,
+          tipWorld.y - 1.15,
+          tipWorld.z
+        );
+      }
+
+      // 8. Update 3D Curved Fishing Line between Rod Tip and Bobber
+      updateFishingLineGeometry();
+
+      // 9. Smooth Camera Interpolation
+      camera.position.lerp(targetCamPos, dt * 3.5);
+      currentCamLook.lerp(targetCamLook, dt * 3.5);
+      camera.lookAt(currentCamLook);
+
+      renderer.render(scene, camera);
+    }
+
+    function updateReelingMiniGame(dt, elapsed) {
+      const diff = activeFish ? activeFish.difficulty : 0.35;
+      const lineUpgrade = UPGRADES.line[state.lineLevel];
+
+      // Fish swims left/right along the bar
+      fishMoveTimer -= dt;
+      if (fishMoveTimer <= 0) {
+        fishMoveTimer = 0.65 + Math.random() * (1.3 - diff * 0.6);
+        const margin = sweetSpotWidth * 0.55;
+        fishTargetPos = margin + Math.random() * (100 - margin * 2);
+      }
+      sweetSpotCenter = THREE.MathUtils.lerp(sweetSpotCenter, fishTargetPos, dt * (1.6 + diff * 2.4));
+
+      // Player cursor moves right when holding Reel, drifts left when released
+      if (isHoldingReel) {
+        playerCursor += 62 * dt;
+      } else {
+        playerCursor -= 54 * dt;
+      }
+      playerCursor = THREE.MathUtils.clamp(playerCursor, 2, 98);
+
+      // Check if playerCursor is inside Sweet Spot
+      const halfW = sweetSpotWidth / 2;
+      const inZone = Math.abs(playerCursor - sweetSpotCenter) <= halfW;
+
+      if (inZone) {
+        catchProgress += 24 * lineUpgrade.reelSpeedBonus * dt;
+      } else {
+        catchProgress -= 14 * lineUpgrade.decayDamp * dt;
+      }
+      catchProgress = THREE.MathUtils.clamp(catchProgress, 0, 100);
+
+      // Periodic subtle reel tick sound and water splash
+      reelAudioCooldown -= dt;
+      if (reelAudioCooldown <= 0) {
+        reelAudioCooldown = 0.14;
+        audio.playReelTick(inZone);
+        if (Math.random() < 0.45) {
+          spawnWaterRipple(bobberGroup.position.x, bobberGroup.position.z, 1.3, inZone ? 0x6ee7b7 : 0xfde047);
+        }
+      }
+
+      // Bobber moves gradually closer to the dock as catchProgress increases
+      const pullFactor = catchProgress / 100;
+      bobberGroup.position.x = THREE.MathUtils.lerp(bobberTargetPos.x, 0.4, pullFactor * 0.65) + Math.sin(elapsed * 14) * 0.12;
+      bobberGroup.position.z = THREE.MathUtils.lerp(bobberTargetPos.z, 2.5, pullFactor * 0.65);
+      bobberGroup.position.y = -0.05 + Math.sin(elapsed * 18) * 0.06;
+
+      // Dynamic rod bend
+      rodGroup.rotation.x = -1.05 - (isHoldingReel ? 0.18 : 0.05) + Math.sin(elapsed * 15) * 0.03;
+
+      // Update DOM elements
+      document.getElementById('reel-sweet-spot').style.left = `${sweetSpotCenter - halfW}%`;
+      document.getElementById('reel-sweet-spot').style.width = `${sweetSpotWidth}%`;
+      document.getElementById('reel-fish-marker').style.left = `${sweetSpotCenter}%`;
+      document.getElementById('reel-player-cursor').style.left = `${playerCursor}%`;
+      document.getElementById('reel-progress-bar').style.width = `${Math.round(catchProgress)}%`;
+      document.getElementById('reel-progress-text').textContent = `${Math.round(catchProgress)}%`;
+
+      if (catchProgress >= 100) {
+        completeCatchSuccess();
+      } else if (catchProgress <= 0) {
+        state.streak = 0;
+        updateHUDCounters();
+        resetToIdle('The fish broke free! Upgrade your Rod or Line in the Shop for an easier catch.');
+      }
+    }
+
+    function updateFishingLineGeometry() {
+      if (!fishingLineGeo || !rodTipMarker || !bobberGroup) return;
+      const start = new THREE.Vector3();
+      rodTipMarker.getWorldPosition(start);
+      const end = bobberGroup.position.clone();
+      end.y += 0.18;
+
+      const posAttr = fishingLineGeo.attributes.position;
+      const segments = 20;
+      const sag = (gamePhase === 'REELING' || gamePhase === 'BITE') ? 0.08 : 0.45;
+
+      for (let i = 0; i <= segments; i++) {
+        const t = i / segments;
+        const x = THREE.MathUtils.lerp(start.x, end.x, t);
+        const z = THREE.MathUtils.lerp(start.z, end.z, t);
+        const y = THREE.MathUtils.lerp(start.y, end.y, t) - Math.sin(t * Math.PI) * sag;
+        posAttr.setXYZ(i, x, y, z);
+      }
+      posAttr.needsUpdate = true;
+    }
+
+    // =========================================================================
+    // 9. TOUCH, MOUSE & KEYBOARD CONTROLS
+    // =========================================================================
+    function updateAimFromPointer(clientX, clientY) {
+      if (gamePhase !== 'IDLE' && gamePhase !== 'CHARGING') return;
+      const rect = renderer.domElement.getBoundingClientRect();
+      pointerNDC.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+      pointerNDC.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(pointerNDC, camera);
+      const hitPoint = new THREE.Vector3();
+      if (raycaster.ray.intersectPlane(waterPlaneMath, hitPoint)) {
+        aimTarget.x = THREE.MathUtils.clamp(hitPoint.x, -8.5, 8.5);
+        aimTarget.z = THREE.MathUtils.clamp(hitPoint.z, -14.5, 0.8);
+      }
+    }
+
+    function setupViewportInteraction(canvasEl) {
+      canvasEl.addEventListener('pointerdown', e => {
+        audio.init();
+        if (gamePhase === 'BITE') {
+          startHookAndReel();
+          return;
+        }
+        if (gamePhase === 'REELING') {
+          isHoldingReel = true;
+          return;
+        }
+        if (gamePhase === 'IDLE') {
+          isDraggingWater = true;
+          updateAimFromPointer(e.clientX, e.clientY);
+        }
+      });
+
+      window.addEventListener('pointermove', e => {
+        if (isDraggingWater || e.pointerType === 'mouse') {
+          updateAimFromPointer(e.clientX, e.clientY);
+        }
+      });
+
+      window.addEventListener('pointerup', () => {
+        isDraggingWater = false;
+        isHoldingReel = false;
+        if (isPointerHoldingButton && gamePhase === 'CHARGING') {
+          isPointerHoldingButton = false;
+          releaseCast();
+        }
+      });
+    }
+
+    function setupUIControls() {
+      const mainBtn = document.getElementById('main-action-btn');
+
+      mainBtn.addEventListener('pointerdown', e => {
+        e.preventDefault();
+        audio.init();
+        if (gamePhase === 'IDLE') {
+          isPointerHoldingButton = true;
+          startChargingCast();
+        } else if (gamePhase === 'WAITING' || gamePhase === 'CASTING_FLIGHT') {
+          resetToIdle('Reeled line back in. Ready to cast again!');
+        } else if (gamePhase === 'BITE') {
+          startHookAndReel();
+        } else if (gamePhase === 'REELING') {
+          isHoldingReel = true;
+        }
+      });
+
+      mainBtn.addEventListener('pointerup', e => {
+        e.preventDefault();
+        isHoldingReel = false;
+        if (gamePhase === 'CHARGING') {
+          isPointerHoldingButton = false;
+          releaseCast();
+        }
+      });
+
+      // Top Bar Buttons
+      document.getElementById('btn-time').addEventListener('click', () => {
+        audio.init();
+        applyTimePreset(state.timeIndex + 1);
+      });
+
+      document.getElementById('btn-camera').addEventListener('click', () => {
+        audio.init();
+        cycleCameraView();
+      });
+
+      document.getElementById('btn-zen').addEventListener('click', () => {
+        audio.init();
+        toggleZenMode();
+      });
+
+      document.getElementById('btn-audio').addEventListener('click', () => {
+        const muted = audio.toggleMute();
+        document.getElementById('audio-icon').textContent = muted ? '🔇' : '🔊';
+      });
+
+      // Journal Modal
+      document.getElementById('btn-journal').addEventListener('click', () => {
+        audio.init();
+        document.getElementById('journal-badge').classList.add('hidden');
+        renderJournalModal();
+        document.getElementById('journal-modal').classList.remove('hidden');
+      });
+      document.getElementById('btn-close-journal').addEventListener('click', () => {
+        document.getElementById('journal-modal').classList.add('hidden');
+      });
+
+      // Shop Modal
+      document.getElementById('btn-shop').addEventListener('click', () => {
+        audio.init();
+        renderShopModal();
+        document.getElementById('shop-modal').classList.remove('hidden');
+      });
+      document.getElementById('btn-close-shop').addEventListener('click', () => {
+        document.getElementById('shop-modal').classList.add('hidden');
+      });
+
+      // Settings Modal
+      document.getElementById('btn-settings').addEventListener('click', () => {
+        audio.init();
+        updateSettingsModalUI();
+        document.getElementById('settings-modal').classList.remove('hidden');
+      });
+      document.getElementById('btn-close-settings').addEventListener('click', () => {
+        document.getElementById('settings-modal').classList.add('hidden');
+      });
+
+      document.getElementById('btn-quality-toggle').addEventListener('click', () => {
+        state.highQuality = !state.highQuality;
+        updateRendererPixelRatio();
+        updateSettingsModalUI();
+        saveState();
+      });
+
+      document.getElementById('btn-settings-zen').addEventListener('click', () => {
+        toggleZenMode();
+        updateSettingsModalUI();
+      });
+
+      document.getElementById('btn-reset-save').addEventListener('click', () => {
+        state = JSON.parse(JSON.stringify(DEFAULT_STATE));
+        saveState();
+        applyTimePreset(0);
+        updateHUDCounters();
+        updateSettingsModalUI();
+        const msg = document.getElementById('reset-confirm-msg');
+        msg.classList.remove('hidden');
+        setTimeout(() => msg.classList.add('hidden'), 2500);
+      });
+
+      // Keyboard Support for PC Players
+      window.addEventListener('keydown', e => {
+        if (e.repeat) return;
+        if (e.code === 'Space') {
+          e.preventDefault();
+          audio.init();
+          if (gamePhase === 'CAUGHT_MODAL') {
+            document.getElementById('btn-keep-fish').click();
+          } else if (gamePhase === 'IDLE') {
+            startChargingCast();
+          } else if (gamePhase === 'WAITING') {
+            resetToIdle();
+          } else if (gamePhase === 'BITE') {
+            startHookAndReel();
+          } else if (gamePhase === 'REELING') {
+            isHoldingReel = true;
+          }
+        } else if (e.key === 't' || e.key === 'T') {
+          applyTimePreset(state.timeIndex + 1);
+        } else if (e.key === 'c' || e.key === 'C') {
+          cycleCameraView();
+        } else if (e.key === 'z' || e.key === 'Z') {
+          toggleZenMode();
+        } else if (e.key === 'j' || e.key === 'J') {
+          const modal = document.getElementById('journal-modal');
+          if (modal.classList.contains('hidden')) {
+            renderJournalModal();
+            modal.classList.remove('hidden');
+          } else {
+            modal.classList.add('hidden');
+          }
+        } else if (e.key === 's' || e.key === 'S') {
+          const modal = document.getElementById('shop-modal');
+          if (modal.classList.contains('hidden')) {
+            renderShopModal();
+            modal.classList.remove('hidden');
+          } else {
+            modal.classList.add('hidden');
+          }
+        } else if (e.key === 'm' || e.key === 'M') {
+          document.getElementById('btn-audio').click();
+        } else if (e.key === 'Escape') {
+          document.getElementById('journal-modal').classList.add('hidden');
+          document.getElementById('shop-modal').classList.add('hidden');
+          document.getElementById('settings-modal').classList.add('hidden');
+        }
+      });
+
+      window.addEventListener('keyup', e => {
+        if (e.code === 'Space') {
+          isHoldingReel = false;
+          if (gamePhase === 'CHARGING') {
+            releaseCast();
+          }
+        }
+      });
+    }
+
+    function toggleZenMode() {
+      state.zenMode = !state.zenMode;
+      document.getElementById('zen-text').textContent = state.zenMode ? 'Zen: On' : 'Zen: Off';
+      const btn = document.getElementById('btn-zen');
+      if (state.zenMode) {
+        btn.classList.add('border-emerald-400/60', 'text-emerald-200');
+      } else {
+        btn.classList.remove('border-emerald-400/60', 'text-emerald-200');
+      }
+      saveState();
+    }
+
+    function updateSettingsModalUI() {
+      const qBtn = document.getElementById('btn-quality-toggle');
+      qBtn.textContent = state.highQuality ? 'High (Crisp)' : 'Battery Saver';
+      qBtn.className = state.highQuality
+        ? 'px-3 py-1.5 rounded-xl font-semibold bg-sky-500/20 text-sky-300 border border-sky-400/30'
+        : 'px-3 py-1.5 rounded-xl font-semibold bg-amber-500/20 text-amber-300 border border-amber-400/30';
+
+      const zBtn = document.getElementById('btn-settings-zen');
+      zBtn.textContent = state.zenMode ? 'Enabled' : 'Off';
+      zBtn.className = state.zenMode
+        ? 'px-3 py-1.5 rounded-xl font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30'
+        : 'px-3 py-1.5 rounded-xl font-semibold bg-slate-800 text-slate-300 border border-slate-700';
+    }
+
+    function updateHUDCounters() {
+      document.getElementById('coin-count').textContent = state.coins;
+      document.getElementById('catch-count').textContent = state.totalCaught;
+      document.getElementById('streak-count').textContent = state.streak;
+
+      const rod = UPGRADES.rod[state.rodLevel];
+      const lure = UPGRADES.lure[state.lureLevel];
+      document.getElementById('gear-rod-label').innerHTML = `${rod.icon} <strong class="text-slate-100 font-medium">${rod.name}</strong>`;
+      document.getElementById('gear-lure-label').innerHTML = `${lure.icon} <strong class="text-slate-100 font-medium">${lure.name}</strong>`;
+
+      // Highlight shop badge if player can afford any next upgrade
+      const nextRod = UPGRADES.rod[state.rodLevel + 1];
+      const nextLure = UPGRADES.lure[state.lureLevel + 1];
+      const nextLine = UPGRADES.line[state.lineLevel + 1];
+      const canAfford =
+        (nextRod && state.coins >= nextRod.cost) ||
+        (nextLure && state.coins >= nextLure.cost) ||
+        (nextLine && state.coins >= nextLine.cost);
+      const shopBadge = document.getElementById('shop-badge');
+      if (canAfford) {
+        shopBadge.classList.remove('hidden');
+      } else {
+        shopBadge.classList.add('hidden');
+      }
+    }
+
+    function renderJournalModal() {
+      const grid = document.getElementById('journal-grid');
+      const discoveredCount = Object.keys(state.discovered).length;
+      document.getElementById('journal-summary').textContent = `Discovered ${discoveredCount} / ${FISH_SPECIES.length} Species`;
+
+      grid.innerHTML = FISH_SPECIES.map(fish => {
+        const entry = state.discovered[fish.id];
+        const unlocked = !!entry;
+        const timeBadge = fish.prefTime === 'any' ? 'All Day' : fish.prefTime.charAt(0).toUpperCase() + fish.prefTime.slice(1);
+        return `
+          <div class="rounded-2xl p-3.5 border ${unlocked ? 'bg-slate-900/75 border-slate-700/80' : 'bg-slate-900/40 border-slate-800/60 opacity-75'} flex gap-3 items-center">
+            <div class="w-20 h-16 shrink-0 rounded-xl bg-slate-950/70 border border-white/10 p-1.5 flex items-center justify-center">
+              ${createFishSVG(fish, unlocked)}
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center justify-between gap-1">
+                <h3 class="text-xs sm:text-sm font-bold truncate ${unlocked ? 'text-white' : 'text-slate-400'}">
+                  ${unlocked ? fish.name : '??? Unknown Fish'}
+                </h3>
+                <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+                  ${fish.rarity}
+                </span>
+              </div>
+              <p class="text-[11px] text-slate-400 mt-0.5 line-clamp-2">
+                ${unlocked ? fish.lore : `Spotted most often during ${timeBadge} hours.`}
+              </p>
+              <div class="flex items-center gap-3 mt-1.5 text-[11px] font-medium ${unlocked ? 'text-amber-300' : 'text-slate-500'}">
+                <span>Caught: ${unlocked ? entry.count : 0}</span>
+                <span>•</span>
+                <span>Best: ${unlocked ? entry.maxWeight.toFixed(2) + ' kg' : '—'}</span>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderShopModal() {
+      document.getElementById('shop-coin-display').textContent = state.coins;
+      const container = document.getElementById('shop-list');
+
+      const categories = [
+        { key: 'rod', stateKey: 'rodLevel', title: 'Fishing Rod', items: UPGRADES.rod },
+        { key: 'lure', stateKey: 'lureLevel', title: 'Artisan Bait & Lures', items: UPGRADES.lure },
+        { key: 'line', stateKey: 'lineLevel', title: 'Fishing Line', items: UPGRADES.line }
+      ];
+
+      container.innerHTML = categories.map(cat => {
+        const curLvl = state[cat.stateKey];
+        const curItem = cat.items[curLvl];
+        const nextItem = cat.items[curLvl + 1];
+        const canBuy = nextItem && state.coins >= nextItem.cost;
+
+        return `
+          <div class="bg-slate-900/75 border border-slate-700/80 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <div class="text-[11px] uppercase tracking-wider font-bold text-amber-300/90">${cat.title} (Lv. ${curLvl + 1}/${cat.items.length})</div>
+              <div class="text-sm sm:text-base font-bold text-white flex items-center gap-2 mt-0.5">
+                <span>${nextItem ? nextItem.icon : curItem.icon}</span>
+                <span>${nextItem ? nextItem.name : curItem.name + ' (Maxed)'}</span>
+              </div>
+              <p class="text-xs text-slate-300 mt-1">${nextItem ? nextItem.desc : 'You own the finest craft gear in Lumina Cove!'}</p>
+            </div>
+            <div class="shrink-0">
+              ${
+                nextItem
+                  ? `<button type="button" data-upgrade-cat="${cat.stateKey}" data-upgrade-list="${cat.key}" class="shop-buy-btn w-full sm:w-auto px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition active:scale-95 ${
+                      canBuy
+                        ? 'bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-lg'
+                        : 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
+                    }">
+                      Upgrade (${nextItem.cost} 🪙)
+                    </button>`
+                  : `<span class="inline-block px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">✨ Max Level</span>`
+              }
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      container.querySelectorAll('.shop-buy-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const stateKey = btn.getAttribute('data-upgrade-cat');
+          const listKey = btn.getAttribute('data-upgrade-list');
+          const curLvl = state[stateKey];
+          const nextItem = UPGRADES[listKey][curLvl + 1];
+          if (nextItem && state.coins >= nextItem.cost) {
+            state.coins -= nextItem.cost;
+            state[stateKey] = curLvl + 1;
+            audio.playUpgrade();
+            updateHUDCounters();
+            renderShopModal();
+            saveState();
+          }
+        });
+      });
+    }
+
+    // =========================================================================
+    // 10. INITIALIZATION ON WINDOW LOAD
+    // =========================================================================
+    window.onload = function () {
+      loadState();
+      init3DWorld();
+      setupUIControls();
+      if (state.zenMode) {
+        document.getElementById('zen-text').textContent = 'Zen: On';
+        document.getElementById('btn-zen').classList.add('border-emerald-400/60', 'text-emerald-200');
+      }
+      updateHUDCounters();
+      animate();
+    };
+  </script>
+</body>
+</html>
