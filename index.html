@@ -82,20 +82,26 @@
   </style>
 </head>
 <body class="relative w-full h-full overflow-hidden select-none">
-<script>
-  // Starts the music on the player's first screen tap/click
-  const playBgmOnTouch = () => {
-    const bgm = document.getElementById('bgm');
-    if (bgm) {
-      bgm.volume = 0.4;
-      bgm.play().catch(() => {});
-    }
-    window.removeEventListener('pointerdown', playBgmOnTouch);
-    window.removeEventListener('keydown', playBgmOnTouch);
-  };
+<audio id="bgm" src="bgm_lofi.mp3" loop preload="auto"></audio>
 
-  window.addEventListener('pointerdown', playBgmOnTouch);
-  window.addEventListener('keydown', playBgmOnTouch);
+<script>
+  (function() {
+    function startMusic() {
+      const audio = document.getElementById('bgm');
+      if (audio) {
+        audio.volume = 0.5;
+        audio.play().then(() => {
+          window.removeEventListener('pointerdown', startMusic);
+          window.removeEventListener('touchstart', startMusic);
+          window.removeEventListener('click', startMusic);
+        }).catch(err => console.log('Audio wait:', err));
+      }
+    }
+
+    window.addEventListener('pointerdown', startMusic);
+    window.addEventListener('touchstart', startMusic);
+    window.addEventListener('click', startMusic);
+  })();
 </script>
 
   <!-- 3D Viewport Container -->
