@@ -82,6 +82,21 @@
   </style>
 </head>
 <body class="relative w-full h-full overflow-hidden select-none">
+<script>
+  // Starts the music on the player's first screen tap/click
+  const playBgmOnTouch = () => {
+    const bgm = document.getElementById('bgm');
+    if (bgm) {
+      bgm.volume = 0.4;
+      bgm.play().catch(() => {});
+    }
+    window.removeEventListener('pointerdown', playBgmOnTouch);
+    window.removeEventListener('keydown', playBgmOnTouch);
+  };
+
+  window.addEventListener('pointerdown', playBgmOnTouch);
+  window.addEventListener('keydown', playBgmOnTouch);
+</script>
 
   <!-- 3D Viewport Container -->
   <div id="canvas-container"></div>
